@@ -6,19 +6,24 @@
 <title>Closing Snake</title>
 <style>
   :root {
-    --bg: #0f1420;
-    --panel: #171e2e;
-    --text: #e6ebf5;
-    --muted: #8a94ab;
-    --board: #121826;
-    --grid: #1a2233;
-    --wall: #3a4459;
-    --warn: #e0533d;
-    --snake: #4fd18b;
-    --snake-head: #8ff0b8;
-    --apple: #ff5d6c;
-    --gold: #ffc940;
-    --ghost: #9fa8ff;
+    /* neon arcade palette */
+    --bg: #04050c;
+    --panel: rgba(13, 17, 38, .72);
+    --line: rgba(0, 240, 255, .22);
+    --text: #e6f3ff;
+    --muted: #7f8bb3;
+    --board: #060812;
+    --grid: rgba(0, 240, 255, .07);
+    --wall: #ff2bd6;
+    --warn: #ff3355;
+    --snake: #00f0ff;
+    --snake-head: #c9fdff;
+    --apple: #ff3864;
+    --gold: #ffd23f;
+    --ghost: #a78bfa;
+    --cyan: #00f0ff;
+    --pink: #ff2bd6;
+    --display: "Segoe UI Black", "Arial Black", Impact, system-ui, sans-serif;
     /* board size: fit the width, and leave room for the title + HUD above it */
     --size: min(92vw, 520px, max(260px, calc(100vh - 210px)));
   }
@@ -35,47 +40,54 @@
     overscroll-behavior: none;   /* no pull-to-refresh while swiping */
     -webkit-tap-highlight-color: transparent;
   }
-  /* slowly drifting glow behind everything */
+  /* slowly drifting neon haze behind everything */
   body::before {
     content: ''; position: fixed; inset: -20%; z-index: -1; pointer-events: none;
     background:
-      radial-gradient(40% 35% at 20% 15%, rgba(79, 209, 139, .13), transparent 70%),
-      radial-gradient(35% 35% at 85% 80%, rgba(159, 168, 255, .12), transparent 70%),
-      radial-gradient(25% 25% at 70% 20%, rgba(255, 201, 64, .06), transparent 70%);
+      radial-gradient(38% 32% at 18% 14%, rgba(0, 240, 255, .14), transparent 70%),
+      radial-gradient(36% 34% at 84% 82%, rgba(255, 43, 214, .14), transparent 70%),
+      radial-gradient(22% 22% at 72% 18%, rgba(167, 139, 250, .08), transparent 70%);
     animation: drift 20s ease-in-out infinite alternate;
   }
   @keyframes drift { to { transform: translate(5%, 4%) rotate(6deg); } }
+  svg.i { width: 1.1em; height: 1.1em; vertical-align: -.18em; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
   h1, .overlay h2.logo {
-    background: linear-gradient(90deg, #8ff0b8, #ffc940, #ff8a9a, #8ff0b8);
+    font-family: var(--display); text-transform: uppercase; letter-spacing: .1em;
+    background: linear-gradient(90deg, var(--cyan), #8ab4ff, var(--pink), var(--cyan));
     background-size: 300% 100%;
     -webkit-background-clip: text; background-clip: text; color: transparent;
     animation: shimmer 8s linear infinite;
+    filter: drop-shadow(0 0 10px rgba(0, 240, 255, .45)) drop-shadow(0 0 22px rgba(255, 43, 214, .25));
   }
   @keyframes shimmer { to { background-position: 300% 0; } }
-  h1 { margin: 0 0 4px; font-size: 1.6rem; letter-spacing: .02em; }
-  .overlay h2.logo { font-size: 2.4rem; letter-spacing: .02em; filter: drop-shadow(0 0 14px rgba(143, 240, 184, .35)); }
-  .sub { color: var(--muted); margin: 0 0 14px; font-size: .9rem; text-align: center; }
+  h1 { margin: 0 0 4px; font-size: 1.5rem; }
+  .overlay h2.logo { font-size: 2.2rem; line-height: 1.05; }
+  .sub { color: var(--muted); margin: 0 0 14px; font-size: .85rem; text-align: center; }
+  /* glassy panels */
   .hud {
     display: flex; gap: 12px; justify-content: space-between; width: var(--size);
-    background: var(--panel); padding: 10px 16px; border-radius: 10px; margin-bottom: 10px;
+    background: var(--panel); padding: 10px 16px; border-radius: 14px; margin-bottom: 10px;
     font-variant-numeric: tabular-nums;
-    border: 1px solid rgba(255, 255, 255, .06); box-shadow: 0 8px 24px rgba(0, 0, 0, .25);
+    border: 1px solid var(--line);
+    box-shadow: 0 0 22px rgba(0, 240, 255, .10), inset 0 0 18px rgba(0, 240, 255, .05);
+    -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
   }
   .hud b.pop { animation: pop-num .3s ease-out; }
-  @keyframes pop-num { 40% { transform: scale(1.35); color: var(--gold); } }
+  @keyframes pop-num { 40% { transform: scale(1.35); color: var(--gold); text-shadow: 0 0 14px var(--gold); } }
   .hud b { display: inline-block; }
-  .hud div span { display: block; font-size: .7rem; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
-  .hud div b { font-size: 1.2rem; }
+  .hud div span { display: block; font-size: .66rem; color: var(--muted); text-transform: uppercase; letter-spacing: .14em; }
+  .hud div b { font-family: var(--display); font-size: 1.2rem; color: var(--cyan); text-shadow: 0 0 10px rgba(0, 240, 255, .6); }
   .wrap { position: relative; width: var(--size); aspect-ratio: 1; touch-action: none; }
   canvas {
-    width: 100%; height: 100%; display: block; border-radius: 10px; background: var(--board); touch-action: none;
-    box-shadow: 0 12px 36px rgba(0, 0, 0, .45), 0 0 0 1px rgba(255, 255, 255, .05);
+    width: 100%; height: 100%; display: block; border-radius: 14px; background: var(--board); touch-action: none;
+    border: 1px solid rgba(255, 43, 214, .35);
+    box-shadow: 0 0 26px rgba(255, 43, 214, .22), 0 0 60px rgba(0, 240, 255, .10), 0 16px 40px rgba(0, 0, 0, .6);
   }
   .overlay {
     position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
-    background: rgba(10, 14, 22, .82); border-radius: 10px; text-align: center; padding: 16px;
+    background: rgba(4, 5, 12, .74); border-radius: 14px; text-align: center; padding: 16px;
     overflow-y: auto; touch-action: pan-y;   /* menus scroll if they don't fit a small board */
-    -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
     animation: menu-in .22s ease-out;
   }
   @keyframes menu-in { from { opacity: 0; transform: scale(.97); } }
@@ -83,73 +95,91 @@
   .overlay > :first-child { margin-top: auto; }
   .overlay > :last-child { margin-bottom: auto; }
   .overlay.hidden { display: none; }
-  .overlay h2 { margin: 0 0 8px; font-size: 1.8rem; }
-  .overlay h2.best { color: var(--gold); font-size: 2.2rem; }
+  .overlay h2 {
+    margin: 0 0 8px; font-family: var(--display); font-size: 1.6rem; text-transform: uppercase; letter-spacing: .08em;
+    color: var(--text); text-shadow: 0 0 12px rgba(0, 240, 255, .5);
+  }
+  .overlay h2.best { color: var(--gold); font-size: 2rem; text-shadow: 0 0 16px rgba(255, 210, 63, .7); }
   .overlay p { margin: 4px 0; color: var(--muted); max-width: 340px; line-height: 1.4; }
-  .legend { margin: 12px 0; font-size: .85rem; text-align: left; color: var(--text); }
+  .legend {
+    margin: 12px 0; font-size: .82rem; text-align: left; color: var(--text);
+    background: rgba(0, 240, 255, .04); border: 1px solid rgba(0, 240, 255, .12); border-radius: 10px; padding: 8px 12px;
+  }
   .legend div { margin: 3px 0; }
+  .legend .powers { padding-left: 1.4em; color: var(--muted); }
+  .dot { display: inline-block; width: .7em; height: .7em; margin-right: .3em; border-radius: 50%; background: var(--c); box-shadow: 0 0 8px var(--c); }
+  /* buttons: neon outline by default */
   button {
-    margin-top: 14px; font: inherit; font-weight: 600; padding: 10px 26px; border: 0; border-radius: 8px;
-    background: var(--snake); color: #08130d; cursor: pointer;
+    margin-top: 14px; font: inherit; font-weight: 700; padding: 10px 26px; border-radius: 10px; cursor: pointer;
+    background: rgba(0, 240, 255, .06); color: var(--text); border: 1px solid var(--line);
+    transition: transform .08s, box-shadow .15s, background .15s, filter .15s;
   }
-  button:hover { filter: brightness(1.1); }
+  button:hover { box-shadow: 0 0 14px rgba(0, 240, 255, .35); border-color: var(--cyan); }
   button:active:not(:disabled) { transform: scale(.96); }
-  button { transition: transform .08s, box-shadow .08s, filter .15s; }
-  /* main action buttons get a chunky 3D look that presses down */
-  #startBtn, #shopClose, #stagesClose, .upgrade button:not(:disabled) {
-    background: linear-gradient(180deg, #74e4a8, #3fbf7a);
-    box-shadow: 0 4px 0 #2a8f5c, 0 8px 18px rgba(0, 0, 0, .3);
+  /* main action buttons: a glowing cyan-to-pink pill */
+  #startBtn, #shopClose, #stagesClose, #achsClose, .upgrade button:not(:disabled) {
+    background: linear-gradient(90deg, var(--cyan), var(--pink)); color: #04050c; border: 0;
+    text-transform: uppercase; letter-spacing: .1em;
+    box-shadow: 0 0 16px rgba(0, 240, 255, .45), 0 0 28px rgba(255, 43, 214, .3);
   }
-  #startBtn:active, #shopClose:active, #stagesClose:active, .upgrade button:not(:disabled):active {
-    transform: translateY(3px); box-shadow: 0 1px 0 #2a8f5c, 0 3px 8px rgba(0, 0, 0, .3);
+  #startBtn:hover, #shopClose:hover, #stagesClose:hover, #achsClose:hover, .upgrade button:not(:disabled):hover {
+    filter: brightness(1.12); box-shadow: 0 0 22px rgba(0, 240, 255, .65), 0 0 40px rgba(255, 43, 214, .45);
   }
-  #startBtn { font-size: 1.1rem; padding: 12px 34px; }
+  #startBtn { font-family: var(--display); font-size: 1.15rem; padding: 12px 40px; border-radius: 999px; animation: breathe 2.4s ease-in-out infinite; }
+  @keyframes breathe { 50% { box-shadow: 0 0 26px rgba(0, 240, 255, .7), 0 0 46px rgba(255, 43, 214, .45); } }
   @media (prefers-reduced-motion: reduce) {
     *, *::before { animation: none !important; transition: none !important; }
   }
   .hud .mute {
-    margin: 0; padding: 4px 10px; align-self: center; font-size: 1.2rem;
-    background: transparent; color: var(--text); border: 1px solid var(--wall);
+    margin: 0; padding: 6px 9px; align-self: center; font-size: 1.15rem; line-height: 1; display: inline-flex;
+    color: var(--cyan);
   }
-  .power { min-height: 22px; margin-top: 10px; color: var(--gold); font-size: .9rem; text-align: center; }
+  .power { min-height: 22px; margin-top: 10px; color: var(--gold); font-size: .9rem; text-align: center; text-shadow: 0 0 10px rgba(255, 210, 63, .6); }
   .levels { display: flex; gap: 6px; margin-top: 10px; }
-  .levels button {
-    margin: 0; padding: 6px 14px; background: transparent; color: var(--text); border: 1px solid var(--wall);
+  .levels button { margin: 0; padding: 6px 14px; }
+  .levels button[aria-pressed="true"] {
+    background: rgba(0, 240, 255, .16); border-color: var(--cyan); color: #fff;
+    box-shadow: 0 0 14px rgba(0, 240, 255, .45), inset 0 0 10px rgba(0, 240, 255, .2);
   }
-  .levels button[aria-pressed="true"] { background: var(--snake); color: #08130d; border-color: var(--snake); }
-  .shop-btn { margin-top: 8px; padding: 6px 16px; background: transparent; color: var(--gold); border: 1px solid var(--gold); }
+  .shop-btn { margin-top: 8px; padding: 6px 14px; color: var(--gold); border-color: rgba(255, 210, 63, .45); background: rgba(255, 210, 63, .06); display: inline-flex; align-items: center; gap: 6px; }
+  .shop-btn:hover { border-color: var(--gold); box-shadow: 0 0 14px rgba(255, 210, 63, .4); }
+  .coin { display: inline-block; width: .9em; height: .9em; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #fff6c2, var(--gold) 55%, #b88a00); box-shadow: 0 0 8px rgba(255, 210, 63, .7); vertical-align: -.1em; }
   .overlay.shop { justify-content: flex-start; overflow-y: auto; }
   .menu-row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
-  .ach-bar { height: 5px; border-radius: 3px; background: var(--wall); overflow: hidden; margin-top: 3px; }
-  .ach-bar span { display: block; height: 100%; background: var(--gold); }
-  .upgrade.done { outline: 1px solid var(--gold); }
+  .ach-bar { height: 5px; border-radius: 3px; background: rgba(255, 255, 255, .08); overflow: hidden; margin-top: 3px; }
+  .ach-bar span { display: block; height: 100%; background: linear-gradient(90deg, var(--cyan), var(--pink)); box-shadow: 0 0 8px var(--cyan); }
+  .upgrade.done { border-color: rgba(255, 210, 63, .6); box-shadow: 0 0 12px rgba(255, 210, 63, .2); }
   .upgrade .reward { font-size: .8rem; color: var(--gold); white-space: nowrap; }
   .toast {
     position: fixed; top: 14px; left: 50%; z-index: 10; pointer-events: none;
     transform: translate(-50%, -160%); transition: transform .35s ease;
-    background: var(--panel); color: var(--gold); border: 1px solid var(--gold); border-radius: 12px;
-    padding: 10px 18px; font-weight: 600; box-shadow: 0 10px 30px rgba(0, 0, 0, .4); white-space: nowrap;
+    background: rgba(13, 17, 38, .9); color: var(--gold); border: 1px solid var(--gold); border-radius: 12px;
+    padding: 10px 18px; font-weight: 700; white-space: nowrap;
+    box-shadow: 0 0 22px rgba(255, 210, 63, .35), 0 10px 30px rgba(0, 0, 0, .5);
   }
   .toast.show { transform: translate(-50%, 0); }
   @media (max-width: 480px) { .menu-row .shop-btn { padding: 6px 10px; font-size: .85rem; } }
   .skins { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; width: 100%; max-width: 420px; margin-top: 10px; }
   .skin {
-    margin: 0; padding: 8px; background: var(--panel); color: var(--text); border: 2px solid transparent;
+    margin: 0; padding: 8px; background: var(--panel); color: var(--text); border: 1px solid rgba(127, 139, 179, .25);
     font-size: .8rem; display: flex; flex-direction: column; align-items: center; gap: 6px;
   }
-  .skin .swatch { width: 100%; height: 16px; border-radius: 8px; }
-  .skin.equipped { border-color: var(--snake); }
-  .skin:disabled { opacity: .45; cursor: not-allowed; filter: none; }
+  .skin .swatch { width: 100%; height: 14px; border-radius: 7px; box-shadow: 0 0 10px rgba(0, 240, 255, .3); }
+  .skin.equipped { border-color: var(--cyan); box-shadow: 0 0 16px rgba(0, 240, 255, .4), inset 0 0 10px rgba(0, 240, 255, .15); }
+  .skin:disabled { opacity: .4; cursor: not-allowed; filter: none; box-shadow: none; }
   .tabs { display: flex; gap: 6px; margin-top: 8px; }
-  .tabs button { margin: 0; padding: 6px 14px; background: transparent; color: var(--text); border: 1px solid var(--wall); }
-  .tabs button[aria-selected="true"] { background: var(--snake); color: #08130d; border-color: var(--snake); }
+  .tabs button { margin: 0; padding: 6px 14px; }
+  .tabs button[aria-selected="true"] { background: rgba(0, 240, 255, .16); border-color: var(--cyan); color: #fff; box-shadow: 0 0 14px rgba(0, 240, 255, .4); }
   .upgrades { display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 420px; margin-top: 10px; }
-  .upgrade { display: flex; align-items: center; gap: 10px; background: var(--panel); border-radius: 8px; padding: 8px 10px; text-align: left; }
+  .upgrade {
+    display: flex; align-items: center; gap: 10px; background: var(--panel); border-radius: 10px; padding: 8px 10px; text-align: left;
+    border: 1px solid rgba(127, 139, 179, .25);
+  }
   .upgrade .info { flex: 1; display: flex; flex-direction: column; gap: 2px; font-size: .85rem; }
   .upgrade small { color: var(--muted); }
-  .upgrade .pips { color: var(--gold); letter-spacing: 2px; font-size: .75rem; }
+  .upgrade .pips { color: var(--cyan); letter-spacing: 2px; font-size: .75rem; text-shadow: 0 0 8px rgba(0, 240, 255, .6); }
   .upgrade button { margin: 0; padding: 6px 12px; white-space: nowrap; }
-  .upgrade button:disabled { opacity: .45; cursor: not-allowed; filter: none; }
+  .upgrade button:disabled { opacity: .45; cursor: not-allowed; filter: none; box-shadow: none; }
   .overlay .daily-info { color: var(--gold); font-size: .85rem; margin-top: 8px; }
   .overlay .daily-info:empty { display: none; }
   .hud-btns { display: flex; gap: 6px; align-self: center; }
@@ -158,11 +188,8 @@
     display: none; grid-template-columns: repeat(3, 64px); grid-template-rows: repeat(2, 56px); gap: 8px;
     margin-top: 6px; touch-action: none;
   }
-  .dpad button {
-    margin: 0; padding: 0; font-size: 1.4rem; background: var(--panel); color: var(--text);
-    border: 1px solid var(--wall); border-radius: 12px;
-  }
-  .dpad button:active { background: var(--snake); color: #08130d; }
+  .dpad button { margin: 0; padding: 0; font-size: 1.4rem; border-radius: 14px; color: var(--cyan); display: grid; place-items: center; }
+  .dpad button:active { background: rgba(0, 240, 255, .25); box-shadow: 0 0 18px rgba(0, 240, 255, .6); }
   .dpad [data-dir="up"] { grid-column: 2; grid-row: 1; }
   .dpad [data-dir="left"] { grid-column: 1; grid-row: 2; }
   .dpad [data-dir="down"] { grid-column: 2; grid-row: 2; }
@@ -182,28 +209,32 @@
     /* keep the whole start menu (and its Play button) visible without scrolling */
     .overlay { padding: 10px; }
     .overlay h2, .overlay h2.logo { font-size: 1.5rem; margin-bottom: 4px; }
-    .legend { font-size: .7rem; margin: 4px 0; }
+    .legend { font-size: .7rem; margin: 4px 0; padding: 4px 10px; }
     .legend div { margin: 1px 0; }
     .levels { flex-wrap: wrap; justify-content: center; margin-top: 6px; }
     .levels button { padding: 4px 9px; font-size: .8rem; }
-    #startBtn { margin-top: 8px; padding: 8px 28px; font-size: 1rem; }
+    #startBtn { margin-top: 8px; padding: 8px 30px; font-size: 1rem; }
     .menu-row .shop-btn { margin-top: 6px; padding: 4px 10px; font-size: .8rem; }
   }
   @media (max-width: 480px) {
     body { padding: 10px; }
-    h1 { font-size: 1.3rem; }
-    .sub { font-size: .8rem; margin-bottom: 8px; }
+    h1 { font-size: 1.2rem; }
+    .sub { font-size: .78rem; margin-bottom: 8px; }
     .hud { padding: 8px 12px; }
     .hud div b { font-size: 1.05rem; }
-    .overlay h2 { font-size: 1.4rem; }
-    .overlay h2.best { font-size: 1.7rem; }
-    .overlay p { font-size: .85rem; }
-    .legend { font-size: .75rem; margin: 8px 0; }
+    .overlay h2 { font-size: 1.3rem; }
+    .overlay { padding: 12px; }
+    .overlay h2.logo { font-size: 1.5rem; margin-bottom: 4px; }
+    .overlay h2.best { font-size: 1.6rem; }
+    .overlay p { font-size: .82rem; }
+    .legend { font-size: .72rem; margin: 6px 0; padding: 5px 9px; }
+    .legend div { margin: 2px 0; }
+    #startBtn { padding: 9px 32px; font-size: 1.05rem; }
     .levels button { padding: 6px 9px; font-size: .85rem; }
     button { margin-top: 10px; padding: 9px 22px; }
     .power { margin-top: 6px; min-height: 18px; }
   }
-  kbd { background: var(--panel); border: 1px solid var(--wall); border-radius: 4px; padding: 0 5px; font-size: .8rem; }
+  kbd { background: rgba(0, 240, 255, .08); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; font-size: .78rem; color: var(--cyan); }
 </style>
 </head>
 <body>
@@ -215,8 +246,8 @@
     <div><span id="bestLabel">Best</span><b id="best">0</b></div>
     <div><span>Walls in</span><b id="wallTimer">15</b></div>
     <div class="hud-btns">
-      <button class="mute" id="pauseBtn" aria-label="Pause" title="Pause (Space)">⏸</button>
-      <button class="mute" id="muteBtn" aria-label="Mute sound" title="Mute (M)">🔊</button>
+      <button class="mute" id="pauseBtn" aria-label="Pause" title="Pause (Space)"></button>
+      <button class="mute" id="muteBtn" aria-label="Mute sound" title="Mute (M)"></button>
     </div>
   </div>
 
@@ -226,43 +257,43 @@
       <h2 id="ovTitle" class="logo">Closing Snake</h2>
       <p id="ovText" class="hint">Use the arrow keys / WASD, or swipe on a phone.</p>
       <div class="legend" id="legend">
-        <div>🍎 Red apple: +10 points, and the snake grows</div>
-        <div>⭐ Golden apple (disappears fast): a random power</div>
-        <div>&nbsp;&nbsp;🐢 Slow-mo · 👻 Ghost · 🧱 Push walls back · ✖2 Double points</div>
-        <div>🟥 A red ring means those walls close in 3 seconds</div>
+        <div><span class="dot" style="--c: var(--apple)"></span> Red orb: +10 points, and the snake grows</div>
+        <div><span class="dot" style="--c: var(--gold)"></span> Golden star (disappears fast): a random power</div>
+        <div class="powers">🐢 Slow-mo · 👻 Ghost · 🧱 Push walls back · ✖2 Double points</div>
+        <div><span class="dot" style="--c: var(--warn)"></span> A red glow means those walls close in 3 seconds</div>
       </div>
       <div class="levels" id="levels" role="group" aria-label="Difficulty">
         <button data-level="easy">Easy</button>
         <button data-level="normal">Normal</button>
         <button data-level="hard">Hard</button>
-        <button data-level="daily">📅 Daily</button>
+        <button data-level="daily">Daily</button>
       </div>
       <p class="daily-info" id="dailyInfo"></p>
       <button id="startBtn">Play</button>
       <div class="menu-row" id="menuRow">
-        <button class="shop-btn" id="stagesBtn">🗺️ Stages</button>
-        <button class="shop-btn" id="achBtn" aria-label="Achievements">🏅 0/12</button>
-        <button class="shop-btn" id="shopBtn">🛒 Shop · 🪙 <span id="coins">0</span></button>
+        <button class="shop-btn" id="stagesBtn"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>Stages</button>
+        <button class="shop-btn" id="achBtn" aria-label="Achievements"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8v5a4 4 0 0 1-8 0zM8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8 21h8M10 17h4"/></svg><span id="achCount">0/12</span></button>
+        <button class="shop-btn" id="shopBtn"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h2l2.4 10.5a1 1 0 0 0 1 .8h8.9a1 1 0 0 0 1-.8L20 8H6.2"/><circle cx="9" cy="19" r="1.5"/><circle cx="17" cy="19" r="1.5"/></svg>Shop <span class="coin"></span><span id="coins">0</span></button>
       </div>
     </div>
     <div class="overlay shop hidden" id="stages" role="dialog" aria-label="Stages">
-      <h2>🗺️ Stages</h2>
+      <h2>Stages</h2>
       <p>Eat enough apples to clear a stage and unlock the next. Watch out for the rocks!</p>
       <div class="skins" id="stageList"></div>
       <button id="stagesClose">Back</button>
     </div>
     <div class="overlay shop hidden" id="achs" role="dialog" aria-label="Achievements">
-      <h2>🏅 Achievements</h2>
+      <h2>Achievements</h2>
       <p>Unlock them to earn bonus coins.</p>
       <div class="upgrades" id="achList"></div>
       <button id="achsClose">Back</button>
     </div>
     <div class="overlay shop hidden" id="shop" role="dialog" aria-label="Skin shop">
-      <h2>🛒 Shop</h2>
-      <p>🪙 <b id="shopCoins">0</b> coins. You earn 1 coin for every 10 points.</p>
+      <h2>Shop</h2>
+      <p><span class="coin"></span> <b id="shopCoins">0</b> coins. You earn 1 coin for every 10 points.</p>
       <div class="tabs" role="tablist">
-        <button id="tabSkins" role="tab" aria-selected="true">🎨 Skins</button>
-        <button id="tabUpgrades" role="tab" aria-selected="false">⚡ Upgrades</button>
+        <button id="tabSkins" role="tab" aria-selected="true">Skins</button>
+        <button id="tabUpgrades" role="tab" aria-selected="false">Upgrades</button>
       </div>
       <div class="skins" id="skinList"></div>
       <div class="upgrades" id="upgradeList" style="display: none"></div>
@@ -272,10 +303,10 @@
   <div class="power" id="power"></div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <div class="dpad" id="dpad" aria-label="Direction buttons">
-    <button data-dir="up" aria-label="Up">▲</button>
-    <button data-dir="left" aria-label="Left">◀</button>
-    <button data-dir="down" aria-label="Down">▼</button>
-    <button data-dir="right" aria-label="Right">▶</button>
+    <button data-dir="up" aria-label="Up"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg></button>
+    <button data-dir="left" aria-label="Left"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
+    <button data-dir="down" aria-label="Down"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+    <button data-dir="right" aria-label="Right"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
   </div>
 
 <script>
@@ -293,9 +324,16 @@
   const GOLD_LIFETIME = 6000;
 
   const canvas = document.getElementById('board');
-  const ctx = canvas.getContext('2d');
+  let ctx = canvas.getContext('2d');   // swapped briefly while painting the cached board layer
   const C = canvas.width / N;
   const $ = id => document.getElementById(id);
+  const svg = d => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`;
+  const ICONS = {                // simple line icons (fixed strings, safe for innerHTML)
+    pause: svg('<path d="M8 5v14M16 5v14"/>'),
+    play:  svg('<path d="M7 5l12 7-12 7z"/>'),
+    sound: svg('<path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M17 9a4 4 0 0 1 0 6M19.5 6.5a8 8 0 0 1 0 11"/>'),
+    muted: svg('<path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M17 9l5 6M22 9l-5 6"/>'),
+  };
   const isTouch = window.matchMedia('(pointer: coarse)').matches;
   const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   const colors = {};
@@ -369,13 +407,13 @@
 
   // --- coins & skins ---
   const SKINS = {
-    classic:  {name: 'Classic',  price: 0,   head: '#8ff0b8', body: '#4fd18b', tail: '#2a8f5c'},
-    ocean:    {name: 'Ocean',    price: 30,  head: '#a8e6ff', body: '#3fa9f5', tail: '#1d4f9e'},
-    fire:     {name: 'Fire',     price: 60,  head: '#ffe08a', body: '#ff8a3d', tail: '#c62f2f'},
-    candy:    {name: 'Candy',    price: 90,  head: '#ffd1f0', body: '#ff6fb5', tail: '#8e44ff'},
-    midnight: {name: 'Midnight', price: 120, head: '#d6d1ff', body: '#6c5ce7', tail: '#2d235e'},
-    gold:     {name: 'Gold',     price: 200, head: '#fff4c2', body: '#ffc940', tail: '#b8860b'},
-    rainbow:  {name: 'Rainbow',  price: 300, head: '#ffffff', body: '#ff5d6c', tail: '#9fa8ff', rainbow: true},
+    classic:  {name: 'Classic',  price: 0,   head: '#d6fdff', body: '#00f0ff', tail: '#ff2bd6'},
+    ocean:    {name: 'Ocean',    price: 30,  head: '#d2ecff', body: '#2f8bff', tail: '#00f0ff'},
+    fire:     {name: 'Fire',     price: 60,  head: '#fff1b8', body: '#ff8a00', tail: '#ff2b4a'},
+    candy:    {name: 'Candy',    price: 90,  head: '#ffe0f6', body: '#ff5cc8', tail: '#a35cff'},
+    midnight: {name: 'Midnight', price: 120, head: '#e2dcff', body: '#7c5cff', tail: '#3a2bff'},
+    gold:     {name: 'Gold',     price: 200, head: '#fff6c9', body: '#ffd23f', tail: '#ff9a00'},
+    rainbow:  {name: 'Rainbow',  price: 300, head: '#ffffff', body: '#ff3864', tail: '#00f0ff', rainbow: true},
   };
   const store = {                // JSON in localStorage; falls back to defaults if storage is blocked
     get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -630,7 +668,7 @@
       addCoins(a.reward);
       toast(`🏅 ${a.name}  ·  +${a.reward} 🪙`);
     });
-    $('achBtn').textContent = `🏅 ${unlocked.length}/${ACHIEVEMENTS.length}`;
+    $('achCount').textContent = `${unlocked.length}/${ACHIEVEMENTS.length}`;
   }
 
   const toasts = [];
@@ -884,13 +922,13 @@
     $('score').textContent = 0;
     $('overlay').classList.add('hidden');
     running = true; paused = false; acc = 0; lastFrame = performance.now();
-    $('pauseBtn').textContent = '⏸';
+    $('pauseBtn').innerHTML = ICONS.pause;
   }
 
   function togglePause() {
     if (!running) return;
     paused = !paused;
-    $('pauseBtn').textContent = paused ? '▶' : '⏸';
+    $('pauseBtn').innerHTML = paused ? ICONS.play : ICONS.pause;
     $('pauseBtn').setAttribute('aria-label', paused ? 'Resume' : 'Pause');
     if (paused) showOverlay('Paused', isTouch ? 'Tap Resume to keep playing.' : 'Press Space or the button to resume.', 'Resume', false);
     else { $('overlay').classList.add('hidden'); lastFrame = performance.now(); }
@@ -933,7 +971,8 @@
       const k = (shakeUntil - now) / SHAKE_TIME * 8;
       ctx.translate((Math.random() * 2 - 1) * k, (Math.random() * 2 - 1) * k);
     }
-    drawBoard();
+    drawStaticLayer();
+    drawScanLine(now);
     drawFireflies(now);
     drawWalls();
     if (s.food) drawApple(s.food, now);
@@ -941,7 +980,7 @@
     drawSnake(now);
     drawVignette();
     if (s.deadAt && now - s.deadAt < 300) {          // red flash when you crash
-      ctx.fillStyle = `rgba(224, 83, 61, ${0.35 * (1 - (now - s.deadAt) / 300)})`;
+      ctx.fillStyle = `rgba(255, 51, 85, ${0.35 * (1 - (now - s.deadAt) / 300)})`;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
     drawEffects(now);
@@ -949,72 +988,142 @@
   }
 
   const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  function drawFireflies(now) {   // soft drifting lights; positions come from time, so there's no state
+  const W = canvas.width;
+  function drawFireflies(now) {   // drifting neon motes; positions come from time, so there's no state
     if (REDUCED_MOTION) return;
-    for (let i = 0; i < 16; i++) {
-      const x = ((i * 0.618) % 1 * canvas.width + now * (0.008 + (i % 3) * 0.004)) % canvas.width;
-      const y = ((i * 0.381 + 0.17) % 1) * canvas.height + Math.sin(now / 900 + i) * 14;
-      const a = 0.1 + 0.1 * Math.sin(now / 500 + i * 1.7);
-      if (a <= 0.02) continue;
-      ctx.fillStyle = `rgba(143, 240, 184, ${a})`;
-      ctx.beginPath(); ctx.arc(x, y, 2 + (i % 3), 0, Math.PI * 2); ctx.fill();
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 18; i++) {
+      const x = ((i * 0.618) % 1 * W + now * (0.008 + (i % 3) * 0.004)) % W;
+      const y = ((i * 0.381 + 0.17) % 1) * W + Math.sin(now / 900 + i) * 14;
+      const a = 0.12 + 0.1 * Math.sin(now / 500 + i * 1.7);
+      if (a <= 0.03) continue;
+      ctx.fillStyle = i % 2 ? `rgba(0, 240, 255, ${a})` : `rgba(255, 43, 214, ${a})`;
+      ctx.beginPath(); ctx.arc(x, y, 1.5 + (i % 3), 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // The board, grid, closed-off area and rocks only change when the walls move (or the stage
+  // changes), so they're painted once into an offscreen layer and copied each frame.
+  const layer = document.createElement('canvas');
+  layer.width = layer.height = W;
+  let layerKey = '';
+  function drawStaticLayer() {
+    const key = `${s.inset}|${stage}`;
+    if (key !== layerKey) {
+      layerKey = key;
+      const screen = ctx;
+      ctx = layer.getContext('2d');       // the paint* helpers draw on whatever ctx is
+      ctx.clearRect(0, 0, W, W);
+      paintBoard(); paintClosedArea(); paintRocks(); paintLaser(colors['--wall']);
+      ctx = screen;
+    }
+    ctx.drawImage(layer, 0, 0);
+  }
+
+  function paintBoard() {
+    ctx.fillStyle = colors['--board'];
+    ctx.fillRect(0, 0, W, W);
+    const glow = ctx.createRadialGradient(W / 2, W / 2, 0, W / 2, W / 2, W * 0.7);   // faint light in the middle
+    glow.addColorStop(0, 'rgba(0, 240, 255, .07)'); glow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, W, W);
+    ctx.strokeStyle = colors['--grid'];               // thin glowing grid
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let i = 1; i < N; i++) {
+      ctx.moveTo(i * C + 0.5, 0); ctx.lineTo(i * C + 0.5, W);
+      ctx.moveTo(0, i * C + 0.5); ctx.lineTo(W, i * C + 0.5);
+    }
+    ctx.stroke();
+  }
+
+  function drawScanLine(now) {                        // a slow scan line sweeping down the board
+    if (!REDUCED_MOTION) {
+      const y = (now / 14) % (W + 120) - 60;
+      const band = ctx.createLinearGradient(0, y - 60, 0, y + 60);
+      band.addColorStop(0, 'rgba(0, 240, 255, 0)'); band.addColorStop(0.5, 'rgba(0, 240, 255, .05)'); band.addColorStop(1, 'rgba(0, 240, 255, 0)');
+      ctx.fillStyle = band;
+      ctx.fillRect(0, y - 60, W, 120);
     }
   }
 
-  function drawBoard() {
-    ctx.fillStyle = colors['--board'];
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = colors['--grid'];               // soft checkerboard
-    for (let y = 0; y < N; y++)
-      for (let x = (y % 2); x < N; x += 2) ctx.fillRect(x * C, y * C, C, C);
+  // A neon stroke: a wide soft glow in the colour, then a thin bright core.
+  function neonStroke(drawPath, color, width, alpha = 1) {
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = color; ctx.shadowColor = color; ctx.shadowBlur = 18; ctx.lineWidth = width;
+    drawPath(); ctx.stroke();
+    ctx.shadowBlur = 0; ctx.strokeStyle = 'rgba(255, 255, 255, .75)'; ctx.lineWidth = Math.max(1, width / 3);
+    drawPath(); ctx.stroke();
+    ctx.restore();
+  }
+
+  const clipRing = (x, y, size, x2, y2, size2) => {   // clip to the band between two squares
+    ctx.beginPath(); ctx.rect(x, y, size, size); ctx.rect(x2, y2, size2, size2); ctx.clip('evenodd');
+  };
+
+  function paintClosedArea() {                         // closed-off area: dim magenta with diagonal hatching
+    const a = s.inset * C, w = (N - 2 * s.inset) * C;
+    if (s.inset > 0) {
+      ctx.save();
+      clipRing(0, 0, W, a, a, w);
+      ctx.fillStyle = 'rgba(255, 43, 214, .07)'; ctx.fillRect(0, 0, W, W);
+      ctx.strokeStyle = 'rgba(255, 43, 214, .18)'; ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let d = -W; d < W; d += 14) { ctx.moveTo(d, 0); ctx.lineTo(d + W, W); }
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  function paintRocks() {
+    for (const k of s.blocks) {                        // stage rocks: glowing violet crystals
+      const [x, y] = k.split(',').map(Number);
+      if (!inArena({x, y})) continue;
+      const px = x * C, py = y * C;
+      ctx.fillStyle = 'rgba(124, 92, 255, .22)';
+      ctx.fillRect(px + 3, py + 3, C - 6, C - 6);
+      neonStroke(() => { ctx.beginPath(); ctx.rect(px + 4, py + 4, C - 8, C - 8); }, '#8b7bff', 2, 0.9);
+      ctx.strokeStyle = 'rgba(255, 255, 255, .25)'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(px + 8, py + C - 8); ctx.lineTo(px + C - 8, py + 8); ctx.stroke();
+    }
+  }
+
+  function paintLaser(color) {                         // the arena edge: a neon laser wall
+    const a = s.inset * C, w = (N - 2 * s.inset) * C;
+    neonStroke(() => { ctx.beginPath(); ctx.rect(a + 2, a + 2, w - 4, w - 4); }, color, 3);
   }
 
   function drawWalls() {
+    // Only the 3-second warning is drawn live (big blurred strokes are slow); the normal pink
+    // laser edge is already in the cached layer.
     const warning = s.inset < MAX_INSET && running && L().wall - s.wallClock < WALL_WARN;
-    const pulse = 0.25 + 0.3 * (0.5 + 0.5 * Math.sin(s.time / 80));
-    for (let y = 0; y < N; y++)
-      for (let x = 0; x < N; x++) {
-        const p = {x, y}, px = x * C, py = y * C;
-        if (!inArena(p)) {                            // bevelled stone block
-          ctx.fillStyle = colors['--wall'];
-          ctx.fillRect(px, py, C, C);
-          ctx.fillStyle = 'rgba(255,255,255,.10)';
-          ctx.fillRect(px, py, C, 3); ctx.fillRect(px, py, 3, C);
-          ctx.fillStyle = 'rgba(0,0,0,.28)';
-          ctx.fillRect(px, py + C - 3, C, 3); ctx.fillRect(px + C - 3, py, 3, C);
-        } else if (isRock(p)) {                      // stage rock: a rounded, shaded boulder
-          ctx.fillStyle = '#6b5d52';
-          ctx.fillRect(px + 2, py + 2, C - 4, C - 4);
-          ctx.fillStyle = 'rgba(255,255,255,.16)';
-          ctx.fillRect(px + 2, py + 2, C - 4, 4); ctx.fillRect(px + 2, py + 2, 4, C - 4);
-          ctx.fillStyle = 'rgba(0,0,0,.35)';
-          ctx.fillRect(px + 2, py + C - 6, C - 4, 4); ctx.fillRect(px + C - 6, py + 2, 4, C - 4);
-        } else if (warning && !inArena(p, s.inset + 1)) {
-          ctx.fillStyle = colors['--warn'];
-          ctx.globalAlpha = pulse;
-          ctx.fillRect(px, py, C, C);
-          ctx.globalAlpha = 1;
-        }
-      }
-    // faint glowing edge around the arena
+    if (!warning) return;
+    const pulse = 0.5 + 0.5 * Math.sin(s.time / 70);
     const a = s.inset * C, w = (N - 2 * s.inset) * C;
-    ctx.strokeStyle = warning ? colors['--warn'] : 'rgba(143,240,184,.25)';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(a + 1, a + 1, w - 2, w - 2);
+    ctx.save();                                        // the ring that's about to close glows red
+    clipRing(a, a, w, a + C, a + C, w - 2 * C);
+    ctx.fillStyle = `rgba(255, 51, 85, ${0.12 + 0.22 * pulse})`; ctx.fillRect(a, a, w, w);
+    ctx.restore();
+    neonStroke(() => { ctx.beginPath(); ctx.rect(a + C, a + C, w - 2 * C, w - 2 * C); }, colors['--warn'], 2, 0.3 + 0.6 * pulse);
+    paintLaser(colors['--warn']);                      // and the edge turns red
   }
 
-  function drawApple(p, now) {
-    const cx = p.x * C + C / 2, cy = p.y * C + C / 2 + Math.sin(now / 300) * C * 0.04, r = C * 0.36;
-    ctx.fillStyle = 'rgba(0,0,0,.25)';                // shadow
-    ctx.beginPath(); ctx.ellipse(p.x * C + C / 2, p.y * C + C * 0.88, r * 0.8, r * 0.25, 0, 0, Math.PI * 2); ctx.fill();
-    const g = ctx.createRadialGradient(cx - r * 0.35, cy - r * 0.35, r * 0.1, cx, cy, r);
-    g.addColorStop(0, '#ffa3ab'); g.addColorStop(0.5, colors['--apple']); g.addColorStop(1, '#b8283a');
+  function drawApple(p, now) {                       // a glowing red orb with a ping ring
+    const cx = p.x * C + C / 2, cy = p.y * C + C / 2, r = C * 0.3 * (1 + 0.06 * Math.sin(now / 200));
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const t = (now % 1400) / 1400;
+    ctx.strokeStyle = `rgba(255, 56, 100, ${0.55 * (1 - t)})`; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(cx, cy, r * (1 + t * 1.5), 0, Math.PI * 2); ctx.stroke();
+    ctx.shadowColor = colors['--apple']; ctx.shadowBlur = 22;
+    const g = ctx.createRadialGradient(cx - r * 0.3, cy - r * 0.3, r * 0.05, cx, cy, r);
+    g.addColorStop(0, '#ffe1e8'); g.addColorStop(0.45, colors['--apple']); g.addColorStop(1, '#8a0030');
     ctx.fillStyle = g;
     ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = '#6b4a2b'; ctx.lineWidth = 2.5;   // stem
-    ctx.beginPath(); ctx.moveTo(cx, cy - r * 0.8); ctx.lineTo(cx + r * 0.15, cy - r * 1.25); ctx.stroke();
-    ctx.fillStyle = '#4fd18b';                        // leaf
-    ctx.beginPath(); ctx.ellipse(cx + r * 0.45, cy - r * 1.05, r * 0.35, r * 0.16, -0.5, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
   }
 
   function drawGold(p, now) {
@@ -1023,7 +1132,12 @@
     const cx = p.x * C + C / 2, cy = p.y * C + C / 2;
     const r = C * (0.44 + Math.sin(now / 150) * 0.05), rot = now / 600;
     ctx.save();
-    ctx.shadowColor = colors['--gold']; ctx.shadowBlur = 18;
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = 'rgba(255, 210, 63, .45)'; ctx.lineWidth = 2;   // two spinning arcs around it
+    for (let k = 0; k < 2; k++) {
+      ctx.beginPath(); ctx.arc(cx, cy, r * 1.35, -rot * 2 + k * Math.PI, -rot * 2 + k * Math.PI + 1.2); ctx.stroke();
+    }
+    ctx.shadowColor = colors['--gold']; ctx.shadowBlur = 22;
     const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
     g.addColorStop(0, '#fff4c2'); g.addColorStop(1, colors['--gold']);
     ctx.fillStyle = g;
@@ -1053,7 +1167,7 @@
     const radius = i => C * (0.42 - 0.16 * i / Math.max(1, n - 1));
     const sk = skin();
     const color = i => ghost ? colors['--ghost']
-      : sk.rainbow ? `hsl(${(i * 24 + now / 8) % 360}, 85%, 62%)`
+      : sk.rainbow ? `hsl(${(i * 24 + now / 8) % 360}, 100%, 60%)`
       : mix(sk.body, sk.tail, i / Math.max(1, n - 1));
 
     // Death animation: segments burst one by one, head first, after a short pause.
@@ -1069,28 +1183,40 @@
       if (first >= n) return;
     }
 
-    ctx.globalAlpha = ghost ? 0.6 : 1;
+    // Neon tube in three passes: a wide soft glow, the coloured body, then a bright core.
+    const segs = (widthOf, styleOf) => {
+      for (let i = n - 1; i > first; i--) {
+        ctx.strokeStyle = styleOf(i);
+        ctx.lineWidth = widthOf(i);
+        ctx.beginPath(); ctx.moveTo(pts[i].x, pts[i].y); ctx.lineTo(pts[i - 1].x, pts[i - 1].y); ctx.stroke();
+      }
+    };
+    ctx.save();
     ctx.lineCap = 'round';
-    for (let i = n - 1; i > first; i--) {              // body as one rounded tube, tail first
-      ctx.strokeStyle = color(i);
-      ctx.lineWidth = radius(i) * 2;
-      ctx.beginPath(); ctx.moveTo(pts[i].x, pts[i].y); ctx.lineTo(pts[i - 1].x, pts[i - 1].y); ctx.stroke();
-    }
-    ctx.strokeStyle = 'rgba(255,255,255,.18)';         // shine along the back
-    ctx.lineWidth = C * 0.12;
-    ctx.beginPath();
-    pts.slice(first).forEach((p, i) => ctx[i ? 'lineTo' : 'moveTo'](p.x - C * 0.08, p.y - C * 0.1));
-    ctx.stroke();
-    if (first > 0) { ctx.globalAlpha = 1; return; }    // the head has already burst
+    ctx.globalAlpha = ghost ? 0.5 : 1;
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha *= 0.22;
+    segs(i => radius(i) * 2 + C * 0.45, color);        // glow
+    ctx.globalAlpha = ghost ? 0.5 : 1;
+    ctx.globalCompositeOperation = 'source-over';
+    segs(i => radius(i) * 2, color);                   // body
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha *= 0.55;
+    segs(i => radius(i) * 0.55, () => '#ffffff');      // bright core
+    ctx.restore();
+    if (first > 0) return;                             // the head has already burst
 
-    // head
+    // head: glowing disc
     const h = pts[0], d = s.dir;
+    ctx.save();
+    ctx.globalAlpha = ghost ? 0.6 : 1;
+    ctx.shadowColor = ghost ? colors['--ghost'] : color(0); ctx.shadowBlur = 20;
     ctx.fillStyle = sk.head;
     ctx.beginPath(); ctx.arc(h.x, h.y, C * 0.46, 0, Math.PI * 2); ctx.fill();
-    ctx.globalAlpha = 1;
+    ctx.restore();
 
     if (now % 1800 < 220 && running) {                 // flick the tongue now and then
-      ctx.strokeStyle = '#ff5d6c'; ctx.lineWidth = 2;
+      ctx.strokeStyle = colors['--apple']; ctx.lineWidth = 2;
       const tx = h.x + d.x * C * 0.75, ty = h.y + d.y * C * 0.75;
       ctx.beginPath();
       ctx.moveTo(h.x + d.x * C * 0.4, h.y + d.y * C * 0.4); ctx.lineTo(tx, ty);
@@ -1142,23 +1268,27 @@
   }
 
   function drawEffects(now) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';          // sparks add up into bright light
     particles = particles.filter(p => now - p.born < p.life);
     particles.forEach(p => {
-      const t = now - p.born;
-      ctx.globalAlpha = 1 - t / p.life;
+      const t = now - p.born, k = 1 - t / p.life;
+      ctx.globalAlpha = k;
       ctx.fillStyle = p.color;
-      ctx.fillRect(p.x + p.vx * t - 3, p.y + p.vy * t + 0.0002 * t * t - 3, 6, 6);
+      ctx.beginPath(); ctx.arc(p.x + p.vx * t, p.y + p.vy * t + 0.0002 * t * t, 2 + 3 * k, 0, Math.PI * 2); ctx.fill();
     });
+    ctx.restore();
     popups = popups.filter(p => now - p.born < p.life);
-    ctx.font = `bold ${Math.round(C * 0.7)}px system-ui, sans-serif`;
+    ctx.save();
+    ctx.font = `${Math.round(C * 0.72)}px "Segoe UI Black", "Arial Black", sans-serif`;
     ctx.textAlign = 'center';
     popups.forEach(p => {
       const t = now - p.born;
       ctx.globalAlpha = 1 - t / p.life;
-      ctx.fillStyle = p.color;
+      ctx.fillStyle = p.color; ctx.shadowColor = p.color; ctx.shadowBlur = 12;
       ctx.fillText(p.text, p.x, p.y - t * 0.05);
     });
-    ctx.globalAlpha = 1;
+    ctx.restore();
   }
 
 
@@ -1179,7 +1309,7 @@
     muted = m;
     try { localStorage.setItem('closingSnakeMuted', m ? '1' : '0'); } catch (e) {}
     const btn = $('muteBtn');
-    btn.textContent = m ? '🔇' : '🔊';
+    btn.innerHTML = m ? ICONS.muted : ICONS.sound;
     btn.setAttribute('aria-label', m ? 'Unmute sound' : 'Mute sound');
     btn.title = m ? 'Unmute (M)' : 'Mute (M)';
   }
@@ -1290,6 +1420,7 @@
   $('tabUpgrades').addEventListener('click', e => { e.currentTarget.blur(); shopTab = 'upgrades'; renderShop(); });
 
   setMuted(muted);
+  $('pauseBtn').innerHTML = ICONS.pause;
   updateCoins();
   checkAchievements();          // award anything already earned (e.g. stages cleared before this update)
   reset();
