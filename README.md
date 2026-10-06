@@ -25,9 +25,21 @@ Pick a level on the start or game-over screen. Each level keeps its own best sco
 
 **Daily challenge:** the date picks the apples, so everyone gets the same apples in the same order that day. It keeps a separate "best today" score that resets at midnight, plus a 🔥 streak of days in a row you've played.
 
-## Coins and skins
+## Coins, skins and upgrades
 
-Every game earns 🪙 1 coin per 10 points. Spend coins in the **🛒 Skins** shop (on the start and game-over screens) to unlock new snake looks: Ocean, Fire, Candy, Midnight, Gold, and an animated Rainbow. You buy each skin once and can switch skins anytime.
+Every game earns 🪙 1 coin per 10 points. Spend coins in the **🛒 Shop** (on the start and game-over screens).
+
+**Skins:** Ocean, Fire, Candy, Midnight, Gold, and an animated Rainbow. You buy each skin once and can switch skins anytime.
+
+**Upgrades:**
+
+| Upgrade | Effect | Price |
+| --- | --- | --- |
+| ⏱️ Longer powers | Powers last 7 → 9 → 11 → 13 s | 40 / 80 / 150 |
+| ⭐ More golden apples | Golden apple chance 35% → 45 → 55 → 65% | 50 / 100 / 180 |
+| 🛡️ Shield | Saves you from one crash, then it's used up (hold up to 5) | 25 each |
+
+If you own a shield, one is ready at the start of each game. When it saves you from a wall or your own tail, the snake stops for a moment so you can turn away. If the walls would crush you, it holds them back.
 
 ## Rules
 
