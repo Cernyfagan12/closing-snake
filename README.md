@@ -10,6 +10,7 @@ Open `index.html` in any modern browser. You don't need to build or install anyt
 | --- | --- |
 | Move | Arrow keys or WASD (swipe on a phone) |
 | Start / pause / resume | Space |
+| Mute / unmute | M, or the 🔊 button (remembered between visits) |
 
 ## Rules
 

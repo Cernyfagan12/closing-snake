@@ -52,18 +52,23 @@
     background: var(--snake); color: #08130d; cursor: pointer;
   }
   button:hover { filter: brightness(1.1); }
+  .hud .mute {
+    margin: 0; padding: 4px 10px; align-self: center; font-size: 1.2rem;
+    background: transparent; color: var(--text); border: 1px solid var(--wall);
+  }
   .power { min-height: 22px; margin-top: 10px; color: var(--gold); font-size: .9rem; text-align: center; }
   kbd { background: var(--panel); border: 1px solid var(--wall); border-radius: 4px; padding: 0 5px; font-size: .8rem; }
 </style>
 </head>
 <body>
   <h1>Closing Snake</h1>
-  <p class="sub">The walls move in every 15 seconds. Golden apples give you powers. <kbd>Space</kbd> pauses.</p>
+  <p class="sub">The walls move in every 15 seconds. Golden apples give you powers. <kbd>Space</kbd> pauses, <kbd>M</kbd> mutes.</p>
 
   <div class="hud">
     <div><span>Score</span><b id="score">0</b></div>
     <div><span>Best</span><b id="best">0</b></div>
     <div><span>Walls in</span><b id="wallTimer">15</b></div>
+    <button class="mute" id="muteBtn" aria-label="Mute sound" title="Mute (M)">🔊</button>
   </div>
 
   <div class="wrap">
@@ -345,7 +350,28 @@
 
   // --- sound ---
   let audio;
+  let muted = false;
+  try { muted = localStorage.getItem('closingSnakeMuted') === '1'; } catch (e) {}
+
+  // Browsers only allow audio after a user gesture, so create/resume it from input handlers.
+  function unlockAudio() {
+    try {
+      audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+      if (audio.state === 'suspended') audio.resume();
+    } catch (e) {}
+  }
+
+  function setMuted(m) {
+    muted = m;
+    try { localStorage.setItem('closingSnakeMuted', m ? '1' : '0'); } catch (e) {}
+    const btn = $('muteBtn');
+    btn.textContent = m ? '🔇' : '🔊';
+    btn.setAttribute('aria-label', m ? 'Unmute sound' : 'Mute sound');
+    btn.title = m ? 'Unmute (M)' : 'Mute (M)';
+  }
+
   function beep(freq, dur) {
+    if (muted) return;
     try {
       audio = audio || new (window.AudioContext || window.webkitAudioContext)();
       const o = audio.createOscillator(), g = audio.createGain();
@@ -373,8 +399,10 @@
     if (keys[e.code]) { e.preventDefault(); turn(...keys[e.code]); }
     else if (e.code === 'Space') {
       e.preventDefault();
+      unlockAudio();
       if (!running) start(); else togglePause();
     }
+    else if (e.code === 'KeyM') setMuted(!muted);
   });
 
   let touch = null;
@@ -393,9 +421,16 @@
   });
 
   $('startBtn').addEventListener('click', () => {
+    unlockAudio();
     if (running && paused) togglePause(); else start();
   });
 
+  $('muteBtn').addEventListener('click', e => {
+    setMuted(!muted);
+    e.currentTarget.blur();     // so Space doesn't re-trigger the button
+  });
+
+  setMuted(muted);
   reset();
   requestAnimationFrame(frame);
 })();
