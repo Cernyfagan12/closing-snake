@@ -77,6 +77,7 @@
   .levels button[aria-pressed="true"] { background: var(--snake); color: #08130d; border-color: var(--snake); }
   .shop-btn { margin-top: 8px; padding: 6px 16px; background: transparent; color: var(--gold); border: 1px solid var(--gold); }
   .overlay.shop { justify-content: flex-start; overflow-y: auto; }
+  .menu-row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
   .skins { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; width: 100%; max-width: 420px; margin-top: 10px; }
   .skin {
     margin: 0; padding: 8px; background: var(--panel); color: var(--text); border: 2px solid transparent;
@@ -166,7 +167,16 @@
       </div>
       <p class="daily-info" id="dailyInfo"></p>
       <button id="startBtn">Play</button>
-      <button class="shop-btn" id="shopBtn">🛒 Shop · 🪙 <span id="coins">0</span></button>
+      <div class="menu-row" id="menuRow">
+        <button class="shop-btn" id="stagesBtn">🗺️ Stages</button>
+        <button class="shop-btn" id="shopBtn">🛒 Shop · 🪙 <span id="coins">0</span></button>
+      </div>
+    </div>
+    <div class="overlay shop hidden" id="stages" role="dialog" aria-label="Stages">
+      <h2>🗺️ Stages</h2>
+      <p>Eat enough apples to clear a stage and unlock the next. Watch out for the rocks!</p>
+      <div class="skins" id="stageList"></div>
+      <button id="stagesClose">Back</button>
     </div>
     <div class="overlay shop hidden" id="shop" role="dialog" aria-label="Skin shop">
       <h2>🛒 Shop</h2>
@@ -252,7 +262,8 @@
   // Each level has its own best score. Normal keeps the original key so existing records carry over.
   // The daily best is per date, so it starts fresh every day.
   let level = 'normal', best = 0;
-  const L = () => LEVELS[level];
+  let stage = null;              // index into STAGES while playing a stage, otherwise null
+  const L = () => stage !== null ? STAGES[stage] : LEVELS[level];
   const bestKey = l => l === 'normal' ? 'closingSnakeBest'
     : l === 'daily' ? 'closingSnakeDaily_' + today()
     : 'closingSnakeBest_' + l;
@@ -260,6 +271,7 @@
   function setLevel(l) {
     if (!LEVELS[l]) return;
     level = l;
+    stage = null;                // picking a level leaves stage mode
     try { localStorage.setItem('closingSnakeLevel', l); } catch (e) {}
     best = 0;
     try { best = Number(localStorage.getItem(bestKey(l))) || 0; } catch (e) {}
@@ -417,6 +429,91 @@
       }));
   }
 
+  // --- stages: rock layouts with an apple goal; clearing one unlocks the next ---
+  const rect = (x1, y1, x2, y2) => {   // all cells from (x1,y1) to (x2,y2) as "x,y"
+    const out = [];
+    for (let x = x1; x <= x2; x++) for (let y = y1; y <= y2; y++) out.push(x + ',' + y);
+    return out;
+  };
+  const box = (a, b, gap) =>             // square outline from a to b, with a gap in the middle of each side
+    rect(a, a, b, b).filter(k => {
+      const [x, y] = k.split(',').map(Number), mid = (a + b) / 2;
+      const edge = x === a || x === b || y === a || y === b;
+      return edge && Math.abs(x - mid) > gap && Math.abs(y - mid) > gap;
+    });
+  // The snake starts at row 10 heading right, so every layout keeps row 10 clear ahead of it.
+  const STAGE_SPEED = {startTick: 140, minTick: 65};
+  const STAGES = [
+    {name: 'Warm-up',  goal: 5,  wall: 20000, blocks: []},
+    {name: 'Pillars',  goal: 8,  wall: 20000, blocks: [...rect(5, 5, 6, 6), ...rect(14, 5, 15, 6), ...rect(5, 14, 6, 15), ...rect(14, 14, 15, 15)]},
+    {name: 'Bars',     goal: 10, wall: 18000, blocks: [...rect(6, 6, 14, 6), ...rect(6, 14, 14, 14)]},
+    {name: 'Columns',  goal: 12, wall: 18000, blocks: [...rect(5, 3, 5, 8), ...rect(5, 12, 5, 17), ...rect(15, 3, 15, 8), ...rect(15, 12, 15, 17)]},
+    {name: 'Corners',  goal: 14, wall: 16000, blocks: [...rect(3, 3, 7, 3), ...rect(3, 4, 3, 7), ...rect(13, 3, 17, 3), ...rect(17, 4, 17, 7),
+                                                        ...rect(3, 17, 7, 17), ...rect(3, 13, 3, 16), ...rect(13, 17, 17, 17), ...rect(17, 13, 17, 16)]},
+    {name: 'Fortress', goal: 16, wall: 16000, blocks: box(6, 14, 1)},
+    {name: 'Zigzag',   goal: 18, wall: 15000, blocks: [...rect(2, 4, 12, 4), ...rect(8, 16, 18, 16), ...rect(16, 6, 16, 8), ...rect(4, 12, 4, 14), ...rect(12, 7, 12, 8)]},
+  ].map(st => ({...st, ...STAGE_SPEED}));
+
+  let stagesCleared = Math.min(STAGES.length, Number(store.get('closingSnakeStages', 0)) || 0);
+
+  function enterStage(i) {
+    stage = i;
+    const st = STAGES[i];
+    $('bestLabel').textContent = `Stage ${i + 1} goal`;
+    $('best').textContent = `0/${st.goal}`;
+    $('wallSecs').textContent = st.wall / 1000;
+    document.querySelectorAll('#levels button').forEach(b => b.setAttribute('aria-pressed', false));
+    $('dailyInfo').textContent = `🗺️ Stage ${i + 1}: ${st.name}. Eat ${st.goal} apples to clear it.`;
+  }
+
+  function stageClear() {
+    running = false;
+    const i = stage, last = i === STAGES.length - 1;
+    const coinsWon = 10 + 5 * i + Math.floor(s.score / 10);   // clear bonus + the usual score coins
+    addCoins(coinsWon);
+    stagesCleared = Math.max(stagesCleared, i + 1);
+    store.set('closingSnakeStages', stagesCleared);
+    burst(s.snake[0], colors['--gold'], 40);
+    [523, 659, 784, 1047].forEach((f, k) => setTimeout(() => beep(f, 0.12), k * 110));
+    buzz([30, 40, 30]);
+    const text = last
+      ? `You cleared every stage! 🪙 +${coinsWon}.`
+      : `${STAGES[i].name} cleared! 🪙 +${coinsWon}. Next up: ${STAGES[i + 1].name}.`;
+    if (!last) enterStage(i + 1);  // so "Next stage" (or Space) plays the next one
+    overlayTimer = setTimeout(() =>
+      showOverlay(last ? '🏆 All stages cleared!' : '🎉 Stage clear!', text, last ? 'Play again' : 'Next stage', false, true), DEATH_PAUSE);
+  }
+
+  const stagesOpen = () => !$('stages').classList.contains('hidden');
+  function openStages() { if (running) return; renderStages(); $('stages').classList.remove('hidden'); }
+  function closeStages() { $('stages').classList.add('hidden'); }
+
+  function renderStages() {
+    const list = $('stageList');
+    list.textContent = '';
+    STAGES.forEach((st, i) => {
+      const locked = i > stagesCleared, done = i < stagesCleared;
+      const b = document.createElement('button');
+      b.className = 'skin' + (i === stage ? ' equipped' : '');
+      b.disabled = locked;
+      const num = document.createElement('b');
+      num.textContent = `${locked ? '🔒' : done ? '✅' : '▶️'} ${i + 1}`;
+      const name = document.createElement('span');
+      name.textContent = st.name;
+      const goal = document.createElement('span');
+      goal.textContent = `🍎 ${st.goal}`;
+      b.append(num, name, goal);
+      b.addEventListener('click', () => {
+        if (locked) return;
+        closeStages();
+        enterStage(i);
+        unlockAudio();
+        start();
+      });
+      list.append(b);
+    });
+  }
+
   let s; // game state
   let running = false, paused = false, lastFrame = 0, acc = 0;
 
@@ -437,6 +534,7 @@
       time: 0,
       shield: false,        // armed at start() if you own a shield
       graceUntil: 0,        // after a shield saves you, crashes are ignored until this time
+      blocks: new Set(stage !== null ? STAGES[stage].blocks : []),   // rocks, as "x,y"
     };
     s.prev = s.snake.map(p => ({...p}));
     s.food = freeCell(rng.food);
@@ -445,7 +543,9 @@
   const inArena = (p, inset = s.inset) =>
     p.x >= inset && p.y >= inset && p.x < N - inset && p.y < N - inset;
 
+  const isRock = p => s.blocks.has(p.x + ',' + p.y);
   const isFree = (x, y) =>
+    !isRock({x, y}) &&
     !s.snake.some(p => p.x === x && p.y === y) &&
     !(s.food && s.food.x === x && s.food.y === y) &&
     !(s.gold && s.gold.x === x && s.gold.y === y);
@@ -474,6 +574,7 @@
 
     const body = s.grow > 0 ? s.snake : s.snake.slice(0, -1);
     const crash = !inArena(head) ? 'You hit the wall.'
+      : isRock(head) ? 'You hit a rock.'
       : !hasPower('ghost') && body.some(p => p.x === head.x && p.y === head.y) ? 'You bit your own tail.'
       : null;
     if (crash) {
@@ -498,6 +599,7 @@
         const g = freeCell(rng.gold);
         if (g) s.gold = {...g, born: s.time};
       }
+      if (stage !== null && s.apples >= STAGES[stage].goal) return stageClear();
     }
     if (s.gold && head.x === s.gold.x && head.y === s.gold.y) {
       s.gold = null;
@@ -556,6 +658,14 @@
     beep(110, 0.3); buzz([60, 40, 90]);
     shakeUntil = performance.now() + SHAKE_TIME;
     burst(s.snake[0], colors['--warn'], 30);
+    const again = isTouch ? 'Tap to try again.' : 'Press Space to try again.';
+    if (stage !== null) {          // stages have a goal instead of a best score
+      const earned = Math.floor(s.score / 10);
+      addCoins(earned);
+      const text = `${reason} Apples: ${s.apples}/${L().goal} · 🪙 +${earned}. ${again}`;
+      overlayTimer = setTimeout(() => showOverlay(`Stage ${stage + 1} failed`, text, 'Try again', false), DEATH_PAUSE);
+      return;
+    }
     if (level === 'daily') { recordDailyPlay(); updateDailyInfo(); }
     const record = s.score > best;
     if (record) {
@@ -579,15 +689,16 @@
     $('legend').style.display = legend ? '' : 'none';
     $('levels').style.display = paused ? 'none' : '';   // difficulty can't change mid-game
     $('dailyInfo').style.display = paused ? 'none' : '';
-    $('shopBtn').style.display = paused ? 'none' : '';
+    $('menuRow').style.display = paused ? 'none' : '';
     $('overlay').classList.remove('hidden');
   }
 
   function start() {
     clearTimeout(overlayTimer);  // restarting during the death pause skips the game-over screen
-    if (level === 'daily') setLevel('daily');   // refresh today's best if the date changed
+    const daily = stage === null && level === 'daily';
+    if (daily) setLevel('daily');   // refresh today's best if the date changed
     const seed = 'closing-snake-' + today();
-    rng = level === 'daily'
+    rng = daily
       ? {food: seededRandom(seed + '-food'), gold: seededRandom(seed + '-gold'), power: seededRandom(seed + '-power')}
       : {food: Math.random, gold: Math.random, power: Math.random};
     reset();
@@ -628,6 +739,7 @@
 
   function updateHud() {
     $('wallTimer').textContent = s.inset >= MAX_INSET ? '—' : Math.ceil((L().wall - s.wallClock) / 1000);
+    if (stage !== null && running) $('best').textContent = `${s.apples}/${L().goal}`;
     let msg = '';
     if (flashMsg && s.time < flashUntil) msg = flashMsg;
     else if (s.power && s.time < s.power.until) {
@@ -675,6 +787,13 @@
           ctx.fillRect(px, py, C, 3); ctx.fillRect(px, py, 3, C);
           ctx.fillStyle = 'rgba(0,0,0,.28)';
           ctx.fillRect(px, py + C - 3, C, 3); ctx.fillRect(px + C - 3, py, 3, C);
+        } else if (isRock(p)) {                      // stage rock: a rounded, shaded boulder
+          ctx.fillStyle = '#6b5d52';
+          ctx.fillRect(px + 2, py + 2, C - 4, C - 4);
+          ctx.fillStyle = 'rgba(255,255,255,.16)';
+          ctx.fillRect(px + 2, py + 2, C - 4, 4); ctx.fillRect(px + 2, py + 2, 4, C - 4);
+          ctx.fillStyle = 'rgba(0,0,0,.35)';
+          ctx.fillRect(px + 2, py + C - 6, C - 4, 4); ctx.fillRect(px + C - 6, py + 2, 4, C - 4);
         } else if (warning && !inArena(p, s.inset + 1)) {
           ctx.fillStyle = colors['--warn'];
           ctx.globalAlpha = pulse;
@@ -873,8 +992,8 @@
     ArrowLeft: [-1, 0], KeyA: [-1, 0], ArrowRight: [1, 0], KeyD: [1, 0],
   };
   document.addEventListener('keydown', e => {
-    if (shopOpen()) {                // in the shop, Space/Escape go back; nothing else
-      if (e.code === 'Escape' || e.code === 'Space') { e.preventDefault(); closeShop(); }
+    if (shopOpen() || stagesOpen()) {   // in a menu panel, Space/Escape go back; nothing else
+      if (e.code === 'Escape' || e.code === 'Space') { e.preventDefault(); closeShop(); closeStages(); }
       return;
     }
     if (keys[e.code]) { e.preventDefault(); turn(...keys[e.code]); }
@@ -939,6 +1058,8 @@
   });
 
   $('shopBtn').addEventListener('click', e => { e.currentTarget.blur(); openShop(); });
+  $('stagesBtn').addEventListener('click', e => { e.currentTarget.blur(); openStages(); });
+  $('stagesClose').addEventListener('click', e => { e.currentTarget.blur(); closeStages(); });
   $('shopClose').addEventListener('click', e => { e.currentTarget.blur(); closeShop(); });
   $('tabSkins').addEventListener('click', e => { e.currentTarget.blur(); shopTab = 'skins'; renderShop(); });
   $('tabUpgrades').addEventListener('click', e => { e.currentTarget.blur(); shopTab = 'upgrades'; renderShop(); });
