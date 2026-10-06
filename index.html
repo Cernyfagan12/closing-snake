@@ -63,6 +63,16 @@
     margin: 0; padding: 6px 14px; background: transparent; color: var(--text); border: 1px solid var(--wall);
   }
   .levels button[aria-pressed="true"] { background: var(--snake); color: #08130d; border-color: var(--snake); }
+  .shop-btn { margin-top: 8px; padding: 6px 16px; background: transparent; color: var(--gold); border: 1px solid var(--gold); }
+  .overlay.shop { justify-content: flex-start; overflow-y: auto; }
+  .skins { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; width: 100%; max-width: 420px; margin-top: 10px; }
+  .skin {
+    margin: 0; padding: 8px; background: var(--panel); color: var(--text); border: 2px solid transparent;
+    font-size: .8rem; display: flex; flex-direction: column; align-items: center; gap: 6px;
+  }
+  .skin .swatch { width: 100%; height: 16px; border-radius: 8px; }
+  .skin.equipped { border-color: var(--snake); }
+  .skin:disabled { opacity: .45; cursor: not-allowed; filter: none; }
   .overlay .daily-info { color: var(--gold); font-size: .85rem; margin-top: 8px; min-height: 1.2em; }
   kbd { background: var(--panel); border: 1px solid var(--wall); border-radius: 4px; padding: 0 5px; font-size: .8rem; }
 </style>
@@ -97,6 +107,13 @@
       </div>
       <p class="daily-info" id="dailyInfo"></p>
       <button id="startBtn">Play</button>
+      <button class="shop-btn" id="shopBtn">🛒 Skins · 🪙 <span id="coins">0</span></button>
+    </div>
+    <div class="overlay shop hidden" id="shop" role="dialog" aria-label="Skin shop">
+      <h2>🛒 Skin shop</h2>
+      <p>🪙 <b id="shopCoins">0</b> coins. You earn 1 coin for every 10 points.</p>
+      <div class="skins" id="skinList"></div>
+      <button id="shopClose">Back</button>
     </div>
   </div>
   <div class="power" id="power"></div>
@@ -186,6 +203,75 @@
   let savedLevel = 'normal';
   try { savedLevel = localStorage.getItem('closingSnakeLevel') || 'normal'; } catch (e) {}
   setLevel(LEVELS[savedLevel] ? savedLevel : 'normal');
+
+  // --- coins & skins ---
+  const SKINS = {
+    classic:  {name: 'Classic',  price: 0,   head: '#8ff0b8', body: '#4fd18b', tail: '#2a8f5c'},
+    ocean:    {name: 'Ocean',    price: 30,  head: '#a8e6ff', body: '#3fa9f5', tail: '#1d4f9e'},
+    fire:     {name: 'Fire',     price: 60,  head: '#ffe08a', body: '#ff8a3d', tail: '#c62f2f'},
+    candy:    {name: 'Candy',    price: 90,  head: '#ffd1f0', body: '#ff6fb5', tail: '#8e44ff'},
+    midnight: {name: 'Midnight', price: 120, head: '#d6d1ff', body: '#6c5ce7', tail: '#2d235e'},
+    gold:     {name: 'Gold',     price: 200, head: '#fff4c2', body: '#ffc940', tail: '#b8860b'},
+    rainbow:  {name: 'Rainbow',  price: 300, head: '#ffffff', body: '#ff5d6c', tail: '#9fa8ff', rainbow: true},
+  };
+  const store = {                // JSON in localStorage; falls back to defaults if storage is blocked
+    get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
+  };
+  let coins = Number(store.get('closingSnakeCoins', 0)) || 0;
+  let owned = store.get('closingSnakeSkins', ['classic']);
+  if (!Array.isArray(owned)) owned = ['classic'];
+  let skinId = store.get('closingSnakeSkin', 'classic');
+  if (!SKINS[skinId] || !owned.includes(skinId)) skinId = 'classic';
+  const skin = () => SKINS[skinId];
+
+  function updateCoins() { $('coins').textContent = coins; $('shopCoins').textContent = coins; }
+  function addCoins(n) {
+    if (n <= 0) return;
+    coins += n;
+    store.set('closingSnakeCoins', coins);
+    updateCoins();
+  }
+
+  const shopOpen = () => !$('shop').classList.contains('hidden');
+  function openShop() { if (running) return; renderShop(); $('shop').classList.remove('hidden'); }
+  function closeShop() { $('shop').classList.add('hidden'); }
+
+  function renderShop() {
+    updateCoins();
+    const list = $('skinList');
+    list.textContent = '';
+    Object.entries(SKINS).forEach(([id, sk]) => {
+      const have = owned.includes(id), on = id === skinId;
+      const b = document.createElement('button');
+      b.className = 'skin' + (on ? ' equipped' : '');
+      b.disabled = !have && coins < sk.price;
+      const swatch = document.createElement('span');
+      swatch.className = 'swatch';
+      swatch.style.background = sk.rainbow
+        ? 'linear-gradient(90deg, #ff5d6c, #ffc940, #4fd18b, #3fa9f5, #9fa8ff)'
+        : `linear-gradient(90deg, ${sk.head}, ${sk.body}, ${sk.tail})`;
+      const name = document.createElement('span');
+      name.textContent = sk.name;
+      const status = document.createElement('span');
+      status.textContent = on ? '✓ Equipped' : have ? 'Equip' : `🪙 ${sk.price}`;
+      b.append(swatch, name, status);
+      b.addEventListener('click', () => {
+        if (!owned.includes(id)) {   // buy it
+          if (coins < sk.price) return;
+          coins -= sk.price;
+          owned.push(id);
+          store.set('closingSnakeCoins', coins);
+          store.set('closingSnakeSkins', owned);
+          unlockAudio(); beep(660, 0.06); setTimeout(() => beep(990, 0.1), 80);
+        }
+        skinId = id;
+        store.set('closingSnakeSkin', id);
+        renderShop();
+      });
+      list.append(b);
+    });
+  }
 
   let s; // game state
   let running = false, paused = false, lastFrame = 0, acc = 0;
@@ -319,8 +405,10 @@
       try { localStorage.setItem(bestKey(level), best); } catch (e) {}
       $('best').textContent = best;
     }
+    const earned = Math.floor(s.score / 10);
+    addCoins(earned);
     const bestLabel = level === 'daily' ? 'Best today' : `Best on ${L().name}`;
-    const text = `${reason} Score: ${s.score} · ${bestLabel}: ${best}. Press Space to play again.`;
+    const text = `${reason} Score: ${s.score} · ${bestLabel}: ${best} · 🪙 +${earned}. Press Space to play again.`;
     overlayTimer = setTimeout(() =>
       showOverlay(record ? '🏆 New best!' : 'Game over', text, 'Play again', false, record), DEATH_PAUSE);
   }
@@ -333,6 +421,7 @@
     $('legend').style.display = legend ? '' : 'none';
     $('levels').style.display = paused ? 'none' : '';   // difficulty can't change mid-game
     $('dailyInfo').style.display = paused ? 'none' : '';
+    $('shopBtn').style.display = paused ? 'none' : '';
     $('overlay').classList.remove('hidden');
   }
 
@@ -470,7 +559,6 @@
     ctx.restore();
   }
 
-  const SKIN = {head: '#8ff0b8', body: '#4fd18b', tail: '#2a8f5c'};
   function mix(a, b, t) {                              // blend two #rrggbb colours
     const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
     const ch = sh => Math.round(((pa >> sh) & 255) + (((pb >> sh) & 255) - ((pa >> sh) & 255)) * t);
@@ -486,7 +574,10 @@
     });
     const ghost = hasPower('ghost'), n = pts.length;
     const radius = i => C * (0.42 - 0.16 * i / Math.max(1, n - 1));
-    const color = i => ghost ? colors['--ghost'] : mix(SKIN.body, SKIN.tail, i / Math.max(1, n - 1));
+    const sk = skin();
+    const color = i => ghost ? colors['--ghost']
+      : sk.rainbow ? `hsl(${(i * 24 + now / 8) % 360}, 85%, 62%)`
+      : mix(sk.body, sk.tail, i / Math.max(1, n - 1));
 
     ctx.globalAlpha = ghost ? 0.6 : 1;
     ctx.lineCap = 'round';
@@ -503,7 +594,7 @@
 
     // head
     const h = pts[0], d = s.dir;
-    ctx.fillStyle = SKIN.head;
+    ctx.fillStyle = sk.head;
     ctx.beginPath(); ctx.arc(h.x, h.y, C * 0.46, 0, Math.PI * 2); ctx.fill();
     ctx.globalAlpha = 1;
 
@@ -619,6 +710,10 @@
     ArrowLeft: [-1, 0], KeyA: [-1, 0], ArrowRight: [1, 0], KeyD: [1, 0],
   };
   document.addEventListener('keydown', e => {
+    if (shopOpen()) {                // in the shop, Space/Escape go back; nothing else
+      if (e.code === 'Escape' || e.code === 'Space') { e.preventDefault(); closeShop(); }
+      return;
+    }
     if (keys[e.code]) { e.preventDefault(); turn(...keys[e.code]); }
     else if (e.code === 'Space') {
       e.preventDefault();
@@ -659,7 +754,11 @@
     e.currentTarget.blur();     // so Space doesn't re-trigger the button
   });
 
+  $('shopBtn').addEventListener('click', e => { e.currentTarget.blur(); openShop(); });
+  $('shopClose').addEventListener('click', e => { e.currentTarget.blur(); closeShop(); });
+
   setMuted(muted);
+  updateCoins();
   reset();
   requestAnimationFrame(frame);
 })();
