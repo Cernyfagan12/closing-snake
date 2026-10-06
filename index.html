@@ -226,6 +226,7 @@
 
   function start() {
     reset();
+    flashMsg = null;            // don't carry a power message into the new game
     $('score').textContent = 0;
     $('overlay').classList.add('hidden');
     running = true; paused = false; acc = 0; lastFrame = performance.now();
