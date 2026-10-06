@@ -290,7 +290,7 @@
     </div>
     <div class="overlay shop hidden" id="shop" role="dialog" aria-label="Skin shop">
       <h2>Shop</h2>
-      <p><span class="coin"></span> <b id="shopCoins">0</b> coins. You earn 1 coin for every 10 points.</p>
+      <p><span class="coin"></span> <b id="shopCoins">0</b> coins. You earn <span id="coinRate">1 coin for every 10 points</span>.</p>
       <div class="tabs" role="tablist">
         <button id="tabSkins" role="tab" aria-selected="true">Skins</button>
         <button id="tabUpgrades" role="tab" aria-selected="false">Upgrades</button>
@@ -426,7 +426,12 @@
   if (!SKINS[skinId] || !owned.includes(skinId)) skinId = 'classic';
   const skin = () => SKINS[skinId];
 
-  function updateCoins() { $('coins').textContent = coins; $('shopCoins').textContent = coins; }
+  function updateCoins() {
+    $('coins').textContent = coins;
+    $('shopCoins').textContent = coins;
+    const m = coinMult();
+    $('coinRate').textContent = '1 coin for every 10 points' + (m > 1 ? ` ×${m.toFixed(2)}` : '');
+  }
   function addCoins(n) {
     if (n <= 0) return;
     coins += n;
@@ -446,6 +451,10 @@
   const UPGRADES = {             // each level costs the next price in the list
     power: {name: '⏱️ Longer powers',      prices: [40, 80, 150],  what: 'Powers last',         value: n => `${POWER_TIME / 1000 + 2 * n}s`},
     gold:  {name: '⭐ More golden apples', prices: [50, 100, 180], what: 'Golden apple chance', value: n => `${35 + 10 * n}%`},
+    coins: {name: '🪙 Coin bonus',         prices: [60, 120, 200], what: 'Extra coins',         value: n => `+${10 * n}%`},
+    pace:  {name: '🐌 Steady pace',        prices: [50, 100, 180], what: 'Speed-up per apple',  value: n => `${100 - 15 * n}%`},
+    walls: {name: '🧱 Slower walls',       prices: [60, 120, 200], what: 'Walls close',         value: n => n ? `${n}s later` : 'on time'},
+    lucky: {name: '🍀 Lucky star',         prices: [40, 80, 150],  what: 'Golden stars last',   value: n => `${GOLD_LIFETIME / 1000 + 1.5 * n}s`},
   };
   const SHIELD_PRICE = 25, MAX_SHIELDS = 5;
   let upgrades = store.get('closingSnakeUpgrades', {});
@@ -455,6 +464,31 @@
 
   const powerTime = () => POWER_TIME + 2000 * upg('power');
   const goldChance = () => 0.35 + 0.1 * upg('gold');
+  const wallPeriod = () => L().wall + 1000 * upg('walls');
+  const goldLife = () => GOLD_LIFETIME + 1500 * upg('lucky');
+
+  // --- rebirth: once every upgrade is maxed, reset coins + upgrades for a permanent coin bonus ---
+  const REBIRTH_BONUS = 0.25;
+  let rebirths = Math.max(0, Math.floor(Number(store.get('closingSnakeRebirth', 0)) || 0));
+  const coinMult = () => (1 + 0.1 * upg('coins')) * (1 + REBIRTH_BONUS * rebirths);
+  const earnCoins = base => Math.floor(base * coinMult());
+  const maxedCount = () => Object.keys(UPGRADES).filter(k => upg(k) >= UPGRADES[k].prices.length).length;
+
+  function rebirth() {
+    if (maxedCount() < Object.keys(UPGRADES).length) return;
+    rebirths++;
+    store.set('closingSnakeRebirth', rebirths);
+    upgrades = {};
+    store.set('closingSnakeUpgrades', upgrades);
+    coins = 0;
+    store.set('closingSnakeCoins', coins);
+    updateCoins();
+    unlockAudio();
+    [392, 523, 659, 784, 1047].forEach((f, k) => setTimeout(() => beep(f, 0.12), k * 90));
+    toast(`🌟 Rebirth ${rebirths}!  Coins ×${(1 + REBIRTH_BONUS * rebirths).toFixed(2)} forever`);
+    checkAchievements();
+    renderShop();
+  }
 
   function useShield() {          // spend this game's shield to survive a crash
     if (!s.shield) return false;
@@ -547,6 +581,43 @@
         shields++;
         store.set('closingSnakeShields', shields);
       }));
+    list.append(rebirthRow());
+  }
+
+  let rebirthArmed = false;      // the Rebirth button needs a second tap to confirm
+  function rebirthRow() {
+    const total = Object.keys(UPGRADES).length, done = maxedCount(), ready = done >= total;
+    const row = document.createElement('div');
+    row.className = 'upgrade rebirth' + (ready ? ' done' : '');
+    const info = document.createElement('div');
+    info.className = 'info';
+    const t = document.createElement('b');
+    t.textContent = '🌟 Rebirth' + (rebirths ? `  ★${rebirths}` : '');
+    const d = document.createElement('small');
+    d.textContent = ready
+      ? `Reset your coins and upgrades to get +${REBIRTH_BONUS * 100}% coins forever. Skins, stages and achievements stay.`
+      : `Max out every upgrade to rebirth (${done}/${total}). Each rebirth gives +${REBIRTH_BONUS * 100}% coins forever.`;
+    const bar = document.createElement('div'); bar.className = 'ach-bar';
+    const fill = document.createElement('span'); fill.style.width = `${done / total * 100}%`;
+    bar.append(fill);
+    const now = document.createElement('span'); now.className = 'pips';
+    now.textContent = `Coins now ×${coinMult().toFixed(2)}`;
+    info.append(t, d, bar, now);
+    const b = document.createElement('button');
+    b.textContent = rebirthArmed ? 'Sure? Tap again' : 'Rebirth';
+    b.disabled = !ready;
+    b.addEventListener('click', () => {
+      if (!rebirthArmed) {
+        rebirthArmed = true;
+        renderShop();
+        setTimeout(() => { if (rebirthArmed) { rebirthArmed = false; if (shopOpen()) renderShop(); } }, 3000);
+        return;
+      }
+      rebirthArmed = false;
+      rebirth();
+    });
+    row.append(info, b);
+    return row;
   }
 
   // --- stages: rock layouts with an apple goal; clearing one unlocks the next ---
@@ -589,7 +660,7 @@
   function stageClear() {
     running = false;
     const i = stage, last = i === STAGES.length - 1;
-    const coinsWon = 10 + 5 * i + Math.floor(s.score / 10);   // clear bonus + the usual score coins
+    const coinsWon = earnCoins(10 + 5 * i + s.score / 10);   // clear bonus + the usual score coins
     addCoins(coinsWon);
     stagesCleared = Math.max(stagesCleared, i + 1);
     store.set('closingSnakeStages', stagesCleared);
@@ -654,6 +725,7 @@
     {id: 'regular',    name: 'Regular',      desc: 'Reach a 3-day daily streak',       reward: 30,  progress: () => [loadStreak().count, 3]},
     {id: 'collector',  name: 'Collector',    desc: 'Own 4 skins',                      reward: 25,  progress: () => [owned.length, 4]},
     {id: 'explorer',   name: 'Explorer',     desc: `Clear all ${STAGES.length} stages`, reward: 100, progress: () => [stagesCleared, STAGES.length]},
+    {id: 'reborn',     name: 'Reborn',       desc: 'Rebirth for the first time',       reward: 50,  progress: () => [rebirths, 1]},
   ];
   let unlocked = store.get('closingSnakeAch', []);
   if (!Array.isArray(unlocked)) unlocked = [];
@@ -769,7 +841,7 @@
   }
 
   const hasPower = t => s.power && s.power.type === t && s.time < s.power.until;
-  const tickMs = () => Math.max(L().minTick, L().startTick - s.apples * 3) * (hasPower('slow') ? 1.8 : 1);
+  const tickMs = () => Math.max(L().minTick, L().startTick - s.apples * 3 * (1 - 0.15 * upg('pace'))) * (hasPower('slow') ? 1.8 : 1);
 
   function step() {
     if (s.queue.length) s.dir = s.queue.shift();
@@ -873,7 +945,7 @@
     burst(s.snake[0], colors['--warn'], 30);
     const again = isTouch ? 'Tap to try again.' : 'Press Space to try again.';
     if (stage !== null) {          // stages have a goal instead of a best score
-      const earned = Math.floor(s.score / 10);
+      const earned = earnCoins(s.score / 10);
       addCoins(earned);
       const text = `${reason} Apples: ${s.apples}/${L().goal} · 🪙 +${earned}. ${again}`;
       overlayTimer = setTimeout(() => showOverlay(`Stage ${stage + 1} failed`, text, 'Try again', false), DEATH_PAUSE);
@@ -886,7 +958,7 @@
       try { localStorage.setItem(bestKey(level), best); } catch (e) {}
       $('best').textContent = best;
     }
-    const earned = Math.floor(s.score / 10);
+    const earned = earnCoins(s.score / 10);
     addCoins(earned);
     const bestLabel = level === 'daily' ? 'Best today' : `Best on ${L().name}`;
     const text = `${reason} Score: ${s.score} · ${bestLabel}: ${best} · 🪙 +${earned}. ${isTouch ? 'Tap Play again.' : 'Press Space to play again.'}`;
@@ -943,9 +1015,9 @@
       acc += dt;
       if (s.inset < MAX_INSET) {
         s.wallClock += dt;
-        if (s.wallClock >= L().wall) { s.wallClock = 0; closeWalls(); }
+        if (s.wallClock >= wallPeriod()) { s.wallClock = 0; closeWalls(); }
       }
-      if (s.gold && s.time - s.gold.born > GOLD_LIFETIME) s.gold = null;
+      if (s.gold && s.time - s.gold.born > goldLife()) s.gold = null;
       while (running && acc >= tickMs()) { acc -= tickMs(); step(); }
     }
     if (s) { draw(now); updateHud(); }
@@ -953,7 +1025,9 @@
   }
 
   function updateHud() {
-    $('wallTimer').textContent = s.inset >= MAX_INSET ? '—' : Math.ceil((L().wall - s.wallClock) / 1000);
+    $('wallTimer').textContent = s.inset >= MAX_INSET ? '—' : Math.ceil((wallPeriod() - s.wallClock) / 1000);
+    const secs = String(wallPeriod() / 1000);           // the hint above the board includes the Slower walls upgrade
+    if ($('wallSecs').textContent !== secs) $('wallSecs').textContent = secs;
     if (stage !== null && running) $('best').textContent = `${s.apples}/${L().goal}`;
     let msg = '';
     if (flashMsg && s.time < flashUntil) msg = flashMsg;
@@ -1099,7 +1173,7 @@
   function drawWalls() {
     // Only the 3-second warning is drawn live (big blurred strokes are slow); the normal pink
     // laser edge is already in the cached layer.
-    const warning = s.inset < MAX_INSET && running && L().wall - s.wallClock < WALL_WARN;
+    const warning = s.inset < MAX_INSET && running && wallPeriod() - s.wallClock < WALL_WARN;
     if (!warning) return;
     const pulse = 0.5 + 0.5 * Math.sin(s.time / 70);
     const a = s.inset * C, w = (N - 2 * s.inset) * C;
@@ -1127,7 +1201,7 @@
   }
 
   function drawGold(p, now) {
-    const left = GOLD_LIFETIME - (s.time - s.gold.born);
+    const left = goldLife() - (s.time - s.gold.born);
     if (left < 1500 && Math.floor(s.time / 100) % 2) return;   // blink before it disappears
     const cx = p.x * C + C / 2, cy = p.y * C + C / 2;
     const r = C * (0.44 + Math.sin(now / 150) * 0.05), rot = now / 600;
