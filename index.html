@@ -120,6 +120,18 @@
   .shop-btn { margin-top: 8px; padding: 6px 16px; background: transparent; color: var(--gold); border: 1px solid var(--gold); }
   .overlay.shop { justify-content: flex-start; overflow-y: auto; }
   .menu-row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+  .ach-bar { height: 5px; border-radius: 3px; background: var(--wall); overflow: hidden; margin-top: 3px; }
+  .ach-bar span { display: block; height: 100%; background: var(--gold); }
+  .upgrade.done { outline: 1px solid var(--gold); }
+  .upgrade .reward { font-size: .8rem; color: var(--gold); white-space: nowrap; }
+  .toast {
+    position: fixed; top: 14px; left: 50%; z-index: 10; pointer-events: none;
+    transform: translate(-50%, -160%); transition: transform .35s ease;
+    background: var(--panel); color: var(--gold); border: 1px solid var(--gold); border-radius: 12px;
+    padding: 10px 18px; font-weight: 600; box-shadow: 0 10px 30px rgba(0, 0, 0, .4); white-space: nowrap;
+  }
+  .toast.show { transform: translate(-50%, 0); }
+  @media (max-width: 480px) { .menu-row .shop-btn { padding: 6px 10px; font-size: .85rem; } }
   .skins { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; width: 100%; max-width: 420px; margin-top: 10px; }
   .skin {
     margin: 0; padding: 8px; background: var(--panel); color: var(--text); border: 2px solid transparent;
@@ -211,6 +223,7 @@
       <button id="startBtn">Play</button>
       <div class="menu-row" id="menuRow">
         <button class="shop-btn" id="stagesBtn">🗺️ Stages</button>
+        <button class="shop-btn" id="achBtn" aria-label="Achievements">🏅 0/12</button>
         <button class="shop-btn" id="shopBtn">🛒 Shop · 🪙 <span id="coins">0</span></button>
       </div>
     </div>
@@ -219,6 +232,12 @@
       <p>Eat enough apples to clear a stage and unlock the next. Watch out for the rocks!</p>
       <div class="skins" id="stageList"></div>
       <button id="stagesClose">Back</button>
+    </div>
+    <div class="overlay shop hidden" id="achs" role="dialog" aria-label="Achievements">
+      <h2>🏅 Achievements</h2>
+      <p>Unlock them to earn bonus coins.</p>
+      <div class="upgrades" id="achList"></div>
+      <button id="achsClose">Back</button>
     </div>
     <div class="overlay shop hidden" id="shop" role="dialog" aria-label="Skin shop">
       <h2>🛒 Shop</h2>
@@ -233,6 +252,7 @@
     </div>
   </div>
   <div class="power" id="power"></div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <div class="dpad" id="dpad" aria-label="Direction buttons">
     <button data-dir="up" aria-label="Up">▲</button>
     <button data-dir="left" aria-label="Left">◀</button>
@@ -387,6 +407,7 @@
     store.set('closingSnakeShields', shields);
     s.graceUntil = s.time + 1200;
     flashPower('🛡️ Shield saved you! Turn away!', 1800);
+    stats.shieldSaves++; saveStats(); checkAchievements();
     burst(s.snake[0], colors['--gold'], 24);
     beep(330, 0.08); setTimeout(() => beep(660, 0.12), 90);
     buzz(40);
@@ -427,6 +448,7 @@
           if (!spend(sk.price)) return;
           owned.push(id);
           store.set('closingSnakeSkins', owned);
+          checkAchievements();
         }
         skinId = id;
         store.set('closingSnakeSkin', id);
@@ -515,6 +537,7 @@
     addCoins(coinsWon);
     stagesCleared = Math.max(stagesCleared, i + 1);
     store.set('closingSnakeStages', stagesCleared);
+    checkAchievements();
     burst(s.snake[0], colors['--gold'], 40);
     [523, 659, 784, 1047].forEach((f, k) => setTimeout(() => beep(f, 0.12), k * 110));
     buzz([30, 40, 30]);
@@ -553,6 +576,86 @@
         start();
       });
       list.append(b);
+    });
+  }
+
+  // --- achievements: lifetime stats + one-time coin rewards ---
+  const stats = {apples: 0, golds: 0, topScore: 0, topHard: 0, squeezed: 0, shieldSaves: 0};
+  const savedStats = store.get('closingSnakeStats', {});
+  if (savedStats && typeof savedStats === 'object')
+    Object.keys(stats).forEach(k => { stats[k] = Number(savedStats[k]) || 0; });
+  const saveStats = () => store.set('closingSnakeStats', stats);
+  const ACHIEVEMENTS = [         // progress() returns [current, goal]
+    {id: 'first_bite', name: 'First bite',   desc: 'Eat your first apple',             reward: 10,  progress: () => [stats.apples, 1]},
+    {id: 'apples_50',  name: 'Hungry',       desc: 'Eat 50 apples in total',           reward: 25,  progress: () => [stats.apples, 50]},
+    {id: 'apples_250', name: 'Bottomless',   desc: 'Eat 250 apples in total',          reward: 60,  progress: () => [stats.apples, 250]},
+    {id: 'gold_10',    name: 'Gold digger',  desc: 'Catch 10 golden apples',           reward: 30,  progress: () => [stats.golds, 10]},
+    {id: 'score_200',  name: 'Getting good', desc: 'Score 200 in one game',            reward: 20,  progress: () => [stats.topScore, 200]},
+    {id: 'score_500',  name: 'Snake master', desc: 'Score 500 in one game',            reward: 50,  progress: () => [stats.topScore, 500]},
+    {id: 'hard_100',   name: 'Hardcore',     desc: 'Score 100 on Hard',                reward: 30,  progress: () => [stats.topHard, 100]},
+    {id: 'squeezed',   name: 'Squeezed',     desc: 'Survive until the walls stop closing', reward: 40, progress: () => [stats.squeezed, 1]},
+    {id: 'close_call', name: 'Close call',   desc: 'Get saved by a shield',            reward: 15,  progress: () => [stats.shieldSaves, 1]},
+    {id: 'regular',    name: 'Regular',      desc: 'Reach a 3-day daily streak',       reward: 30,  progress: () => [loadStreak().count, 3]},
+    {id: 'collector',  name: 'Collector',    desc: 'Own 4 skins',                      reward: 25,  progress: () => [owned.length, 4]},
+    {id: 'explorer',   name: 'Explorer',     desc: `Clear all ${STAGES.length} stages`, reward: 100, progress: () => [stagesCleared, STAGES.length]},
+  ];
+  let unlocked = store.get('closingSnakeAch', []);
+  if (!Array.isArray(unlocked)) unlocked = [];
+
+  function checkAchievements() {
+    ACHIEVEMENTS.forEach(a => {
+      if (unlocked.includes(a.id)) return;
+      const [cur, goal] = a.progress();
+      if (cur < goal) return;
+      unlocked.push(a.id);
+      store.set('closingSnakeAch', unlocked);
+      addCoins(a.reward);
+      toast(`🏅 ${a.name}  ·  +${a.reward} 🪙`);
+    });
+    $('achBtn').textContent = `🏅 ${unlocked.length}/${ACHIEVEMENTS.length}`;
+  }
+
+  const toasts = [];
+  let toastBusy = false;
+  function toast(msg) {          // queue banners so several unlocks show one after another
+    toasts.push(msg);
+    if (toastBusy) return;
+    toastBusy = true;
+    (function next() {
+      if (!toasts.length) { toastBusy = false; return; }
+      const el = $('toast');
+      el.textContent = toasts.shift();
+      el.classList.add('show');
+      if (audio) { beep(1047, 0.08); setTimeout(() => beep(1568, 0.12), 100); }   // no sound before the first tap
+      setTimeout(() => { el.classList.remove('show'); setTimeout(next, 400); }, 2200);
+    })();
+  }
+
+  const achsOpen = () => !$('achs').classList.contains('hidden');
+  function openAchs() { if (running) return; renderAchs(); $('achs').classList.remove('hidden'); }
+  function closeAchs() { $('achs').classList.add('hidden'); }
+
+  function renderAchs() {
+    const list = $('achList');
+    list.textContent = '';
+    ACHIEVEMENTS.forEach(a => {
+      const done = unlocked.includes(a.id);
+      const [cur, goal] = a.progress();
+      const row = document.createElement('div');
+      row.className = 'upgrade' + (done ? ' done' : '');
+      const info = document.createElement('div');
+      info.className = 'info';
+      const t = document.createElement('b'); t.textContent = `${done ? '🏅' : '🔒'} ${a.name}`;
+      const d = document.createElement('small'); d.textContent = done || goal === 1 ? a.desc : `${a.desc} (${Math.min(cur, goal)}/${goal})`;
+      const bar = document.createElement('div'); bar.className = 'ach-bar';
+      const fill = document.createElement('span'); fill.style.width = `${Math.min(100, cur / goal * 100)}%`;
+      bar.append(fill);
+      info.append(t, d, bar);
+      const r = document.createElement('span');
+      r.className = 'reward';
+      r.textContent = done ? '✅' : `+${a.reward} 🪙`;
+      row.append(info, r);
+      list.append(row);
     });
   }
 
@@ -633,6 +736,7 @@
 
     if (s.food && head.x === s.food.x && head.y === s.food.y) {
       s.apples++;
+      stats.apples++; saveStats();
       s.grow += 1;
       const pts = addScore(10);
       burst(head, colors['--apple'], 14);
@@ -647,6 +751,7 @@
     }
     if (s.gold && head.x === s.gold.x && head.y === s.gold.y) {
       s.gold = null;
+      stats.golds++; saveStats();
       const pts = addScore(25);
       burst(head, colors['--gold'], 24);
       popup(head, '+' + pts, colors['--gold']);
@@ -674,6 +779,10 @@
   function addScore(n) {
     const pts = hasPower('double') ? n * 2 : n;
     s.score += pts;
+    stats.topScore = Math.max(stats.topScore, s.score);
+    if (stage === null && level === 'hard') stats.topHard = Math.max(stats.topHard, s.score);
+    saveStats();
+    checkAchievements();
     const el = $('score');
     el.textContent = s.score;
     el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop');   // restart the pop animation
@@ -694,6 +803,7 @@
     }
     if (s.food && !inArena(s.food)) s.food = freeCell(rng.food);
     if (s.gold && !inArena(s.gold)) s.gold = null;
+    if (s.inset >= MAX_INSET) { stats.squeezed = 1; saveStats(); checkAchievements(); }
   }
 
   const DEATH_PAUSE = 700;      // let the crash play out before the game-over screen
@@ -713,7 +823,7 @@
       overlayTimer = setTimeout(() => showOverlay(`Stage ${stage + 1} failed`, text, 'Try again', false), DEATH_PAUSE);
       return;
     }
-    if (level === 'daily') { recordDailyPlay(); updateDailyInfo(); }
+    if (level === 'daily') { recordDailyPlay(); updateDailyInfo(); checkAchievements(); }
     const record = s.score > best;
     if (record) {
       best = s.score;
@@ -1081,8 +1191,8 @@
     ArrowLeft: [-1, 0], KeyA: [-1, 0], ArrowRight: [1, 0], KeyD: [1, 0],
   };
   document.addEventListener('keydown', e => {
-    if (shopOpen() || stagesOpen()) {   // in a menu panel, Space/Escape go back; nothing else
-      if (e.code === 'Escape' || e.code === 'Space') { e.preventDefault(); closeShop(); closeStages(); }
+    if (shopOpen() || stagesOpen() || achsOpen()) {   // in a menu panel, Space/Escape go back; nothing else
+      if (e.code === 'Escape' || e.code === 'Space') { e.preventDefault(); closeShop(); closeStages(); closeAchs(); }
       return;
     }
     if (keys[e.code]) { e.preventDefault(); turn(...keys[e.code]); }
@@ -1149,12 +1259,15 @@
   $('shopBtn').addEventListener('click', e => { e.currentTarget.blur(); openShop(); });
   $('stagesBtn').addEventListener('click', e => { e.currentTarget.blur(); openStages(); });
   $('stagesClose').addEventListener('click', e => { e.currentTarget.blur(); closeStages(); });
+  $('achBtn').addEventListener('click', e => { e.currentTarget.blur(); openAchs(); });
+  $('achsClose').addEventListener('click', e => { e.currentTarget.blur(); closeAchs(); });
   $('shopClose').addEventListener('click', e => { e.currentTarget.blur(); closeShop(); });
   $('tabSkins').addEventListener('click', e => { e.currentTarget.blur(); shopTab = 'skins'; renderShop(); });
   $('tabUpgrades').addEventListener('click', e => { e.currentTarget.blur(); shopTab = 'upgrades'; renderShop(); });
 
   setMuted(muted);
   updateCoins();
+  checkAchievements();          // award anything already earned (e.g. stages cleared before this update)
   reset();
   requestAnimationFrame(frame);
 })();
