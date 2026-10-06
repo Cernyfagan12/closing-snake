@@ -171,6 +171,24 @@
     .dpad { display: grid; }
     .keys { display: none; }       /* keyboard hints are useless on a phone */
   }
+  /* Short, wide screens (e.g. an 800x450 game frame on a portal): the overlay already shows the
+     logo, so drop the page title and give the height to the board. */
+  @media (max-height: 620px) and (min-aspect-ratio: 1/1) {
+    :root { --size: min(92vw, 520px, max(220px, calc(100vh - 120px))); }
+    h1, .sub, #ovText.hint { display: none; }
+    body { padding: 8px; }
+    .hud { padding: 6px 12px; margin-bottom: 6px; }
+    .power { margin-top: 4px; min-height: 18px; }
+    /* keep the whole start menu (and its Play button) visible without scrolling */
+    .overlay { padding: 10px; }
+    .overlay h2, .overlay h2.logo { font-size: 1.5rem; margin-bottom: 4px; }
+    .legend { font-size: .7rem; margin: 4px 0; }
+    .legend div { margin: 1px 0; }
+    .levels { flex-wrap: wrap; justify-content: center; margin-top: 6px; }
+    .levels button { padding: 4px 9px; font-size: .8rem; }
+    #startBtn { margin-top: 8px; padding: 8px 28px; font-size: 1rem; }
+    .menu-row .shop-btn { margin-top: 6px; padding: 4px 10px; font-size: .8rem; }
+  }
   @media (max-width: 480px) {
     body { padding: 10px; }
     h1 { font-size: 1.3rem; }
@@ -206,7 +224,7 @@
     <canvas id="board" width="630" height="630"></canvas>
     <div class="overlay" id="overlay">
       <h2 id="ovTitle" class="logo">Closing Snake</h2>
-      <p id="ovText">Use the arrow keys / WASD, or swipe on a phone.</p>
+      <p id="ovText" class="hint">Use the arrow keys / WASD, or swipe on a phone.</p>
       <div class="legend" id="legend">
         <div>🍎 Red apple: +10 points, and the snake grows</div>
         <div>⭐ Golden apple (disappears fast): a random power</div>
@@ -842,6 +860,7 @@
     $('ovTitle').textContent = title;
     $('ovTitle').classList.toggle('best', highlight);
     $('ovTitle').classList.remove('logo');   // the animated logo is only for the first screen
+    $('ovText').classList.remove('hint');    // the controls hint too
     $('ovText').textContent = text;
     $('startBtn').textContent = btn;
     $('legend').style.display = legend ? '' : 'none';
@@ -1214,6 +1233,11 @@
     touch = {x: t.clientX, y: t.clientY};
   }, {passive: true});
   canvas.addEventListener('touchend', () => touch = null);
+
+  // iOS silences audio when the app goes to the background; resume it on the next tap or click.
+  ['touchend', 'click'].forEach(ev => document.addEventListener(ev, () => {
+    if (audio && audio.state === 'suspended') unlockAudio();
+  }, {passive: true}));
 
   document.addEventListener('visibilitychange', () => {
     if (document.hidden && running && !paused) togglePause();
