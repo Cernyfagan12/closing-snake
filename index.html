@@ -58,16 +58,21 @@
     background: transparent; color: var(--text); border: 1px solid var(--wall);
   }
   .power { min-height: 22px; margin-top: 10px; color: var(--gold); font-size: .9rem; text-align: center; }
+  .levels { display: flex; gap: 6px; margin-top: 10px; }
+  .levels button {
+    margin: 0; padding: 6px 14px; background: transparent; color: var(--text); border: 1px solid var(--wall);
+  }
+  .levels button[aria-pressed="true"] { background: var(--snake); color: #08130d; border-color: var(--snake); }
   kbd { background: var(--panel); border: 1px solid var(--wall); border-radius: 4px; padding: 0 5px; font-size: .8rem; }
 </style>
 </head>
 <body>
   <h1>Closing Snake</h1>
-  <p class="sub">The walls move in every 15 seconds. Golden apples give you powers. <kbd>Space</kbd> pauses, <kbd>M</kbd> mutes.</p>
+  <p class="sub">The walls move in every <span id="wallSecs">15</span> seconds. Golden apples give you powers. <kbd>Space</kbd> pauses, <kbd>M</kbd> mutes.</p>
 
   <div class="hud">
     <div><span>Score</span><b id="score">0</b></div>
-    <div><span>Best</span><b id="best">0</b></div>
+    <div><span id="bestLabel">Best</span><b id="best">0</b></div>
     <div><span>Walls in</span><b id="wallTimer">15</b></div>
     <button class="mute" id="muteBtn" aria-label="Mute sound" title="Mute (M)">🔊</button>
   </div>
@@ -83,6 +88,11 @@
         <div>&nbsp;&nbsp;🐢 Slow-mo · 👻 Ghost · 🧱 Push walls back · ✖2 Double points</div>
         <div>🟥 A red ring means those walls close in 3 seconds</div>
       </div>
+      <div class="levels" id="levels" role="group" aria-label="Difficulty">
+        <button data-level="easy">Easy</button>
+        <button data-level="normal">Normal</button>
+        <button data-level="hard">Hard</button>
+      </div>
       <button id="startBtn">Play</button>
     </div>
   </div>
@@ -92,7 +102,11 @@
 (() => {
   const N = 21;                 // grid size
   const MAX_INSET = 6;          // smallest arena is 9x9
-  const WALL_PERIOD = 15000;    // ms between wall closings
+  const LEVELS = {              // wall = ms between wall closings; tick = ms per move
+    easy:   {name: 'Easy',   wall: 20000, startTick: 160, minTick: 85},
+    normal: {name: 'Normal', wall: 15000, startTick: 140, minTick: 65},
+    hard:   {name: 'Hard',   wall: 10000, startTick: 115, minTick: 55},
+  };
   const WALL_WARN = 3000;       // warning before closing
   const POWER_TIME = 7000;
   const GOLD_LIFETIME = 6000;
@@ -105,9 +119,27 @@
   const colors = {};
   ['--text','--board','--grid','--wall','--warn','--snake','--snake-head','--apple','--gold','--ghost'].forEach(k => colors[k] = css(k));
 
-  let best = 0;
-  try { best = Number(localStorage.getItem('closingSnakeBest')) || 0; } catch (e) {}
-  $('best').textContent = best;
+  // Each level has its own best score. Normal keeps the original key so existing records carry over.
+  let level = 'normal', best = 0;
+  const L = () => LEVELS[level];
+  const bestKey = l => l === 'normal' ? 'closingSnakeBest' : 'closingSnakeBest_' + l;
+
+  function setLevel(l) {
+    if (!LEVELS[l]) return;
+    level = l;
+    try { localStorage.setItem('closingSnakeLevel', l); } catch (e) {}
+    best = 0;
+    try { best = Number(localStorage.getItem(bestKey(l))) || 0; } catch (e) {}
+    $('best').textContent = best;
+    $('bestLabel').textContent = `Best · ${L().name}`;
+    $('wallSecs').textContent = L().wall / 1000;
+    document.querySelectorAll('#levels button').forEach(b =>
+      b.setAttribute('aria-pressed', b.dataset.level === l));
+  }
+
+  let savedLevel = 'normal';
+  try { savedLevel = localStorage.getItem('closingSnakeLevel') || 'normal'; } catch (e) {}
+  setLevel(LEVELS[savedLevel] ? savedLevel : 'normal');
 
   let s; // game state
   let running = false, paused = false, lastFrame = 0, acc = 0;
@@ -147,7 +179,7 @@
   }
 
   const hasPower = t => s.power && s.power.type === t && s.time < s.power.until;
-  const tickMs = () => Math.max(65, 140 - s.apples * 3) * (hasPower('slow') ? 1.8 : 1);
+  const tickMs = () => Math.max(L().minTick, L().startTick - s.apples * 3) * (hasPower('slow') ? 1.8 : 1);
 
   function step() {
     if (s.queue.length) s.dir = s.queue.shift();
@@ -227,10 +259,10 @@
     const record = s.score > best;
     if (record) {
       best = s.score;
-      try { localStorage.setItem('closingSnakeBest', best); } catch (e) {}
+      try { localStorage.setItem(bestKey(level), best); } catch (e) {}
       $('best').textContent = best;
     }
-    const text = `${reason} Score: ${s.score} · Best: ${best}. Press Space to play again.`;
+    const text = `${reason} Score: ${s.score} · Best on ${L().name}: ${best}. Press Space to play again.`;
     overlayTimer = setTimeout(() =>
       showOverlay(record ? '🏆 New best!' : 'Game over', text, 'Play again', false, record), DEATH_PAUSE);
   }
@@ -241,6 +273,7 @@
     $('ovText').textContent = text;
     $('startBtn').textContent = btn;
     $('legend').style.display = legend ? '' : 'none';
+    $('levels').style.display = paused ? 'none' : '';   // difficulty can't change mid-game
     $('overlay').classList.remove('hidden');
   }
 
@@ -269,7 +302,7 @@
       acc += dt;
       if (s.inset < MAX_INSET) {
         s.wallClock += dt;
-        if (s.wallClock >= WALL_PERIOD) { s.wallClock = 0; closeWalls(); }
+        if (s.wallClock >= L().wall) { s.wallClock = 0; closeWalls(); }
       }
       if (s.gold && s.time - s.gold.born > GOLD_LIFETIME) s.gold = null;
       while (running && acc >= tickMs()) { acc -= tickMs(); step(); }
@@ -279,7 +312,7 @@
   }
 
   function updateHud() {
-    $('wallTimer').textContent = s.inset >= MAX_INSET ? '—' : Math.ceil((WALL_PERIOD - s.wallClock) / 1000);
+    $('wallTimer').textContent = s.inset >= MAX_INSET ? '—' : Math.ceil((L().wall - s.wallClock) / 1000);
     let msg = '';
     if (flashMsg && s.time < flashUntil) msg = flashMsg;
     else if (s.power && s.time < s.power.until) {
@@ -307,7 +340,7 @@
     }
 
     // walls
-    const warning = s.inset < MAX_INSET && running && WALL_PERIOD - s.wallClock < WALL_WARN;
+    const warning = s.inset < MAX_INSET && running && L().wall - s.wallClock < WALL_WARN;
     for (let y = 0; y < N; y++)
       for (let x = 0; x < N; x++) {
         const p = {x, y};
@@ -484,6 +517,12 @@
     unlockAudio();
     if (running && paused) togglePause(); else start();
   });
+
+  document.querySelectorAll('#levels button').forEach(b => b.addEventListener('click', () => {
+    if (running) return;
+    setLevel(b.dataset.level);
+    b.blur();                   // so Space starts the game instead of re-clicking the button
+  }));
 
   $('muteBtn').addEventListener('click', e => {
     setMuted(!muted);
