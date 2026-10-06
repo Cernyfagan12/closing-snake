@@ -41,7 +41,7 @@ Press **🗺️ Stages** to play through 7 stages with rock obstacles. Eat the g
 
 ## 🏅 Achievements
 
-12 achievements, each paying bonus coins once: eat 1 / 50 / 250 apples, catch 10 golden apples, score 200 / 500 in one game, score 100 on Hard, survive until the walls stop closing, get saved by a shield, reach a 3-day daily streak, own 4 skins, and clear all stages. Press **🏅** on the start or game-over screen to see your progress.
+13 achievements, each paying bonus coins once: eat 1 / 50 / 250 apples, catch 10 golden apples, score 200 / 500 in one game, score 100 on Hard, survive until the walls stop closing, get saved by a shield, reach a 3-day daily streak, own 4 skins, clear all stages, and rebirth once. Press **🏅** on the start or game-over screen to see your progress.
 
 ## Coins, skins and upgrades
 
@@ -55,7 +55,13 @@ Every game earns 🪙 1 coin per 10 points. Spend coins in the **🛒 Shop** (on
 | --- | --- | --- |
 | ⏱️ Longer powers | Powers last 7 → 9 → 11 → 13 s | 40 / 80 / 150 |
 | ⭐ More golden apples | Golden apple chance 35% → 45 → 55 → 65% | 50 / 100 / 180 |
+| 🪙 Coin bonus | +10% / +20% / +30% coins | 60 / 120 / 200 |
+| 🐌 Steady pace | The snake speeds up 15% / 30% / 45% less with each apple | 50 / 100 / 180 |
+| 🧱 Slower walls | Walls close 1 / 2 / 3 s later | 60 / 120 / 200 |
+| 🍀 Lucky star | Golden stars stay 7.5 / 9 / 10.5 s | 40 / 80 / 150 |
 | 🛡️ Shield | Saves you from one crash, then it's used up (hold up to 5) | 25 each |
+
+**🌟 Rebirth:** once every upgrade above is maxed, you can rebirth. Your coins and upgrades reset, but you get **+25% coins forever** for each rebirth (×1.25, ×1.5, ×1.75…). Skins, stages, achievements and shields stay.
 
 If you own a shield, one is ready at the start of each game. When it saves you from a wall or your own tail, the snake stops for a moment so you can turn away. If the walls would crush you, it holds them back.
 
