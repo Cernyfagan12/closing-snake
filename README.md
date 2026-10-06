@@ -25,6 +25,10 @@ Pick a level on the start or game-over screen. Each level keeps its own best sco
 
 **Daily challenge:** the date picks the apples, so everyone gets the same apples in the same order that day. It keeps a separate "best today" score that resets at midnight, plus a 🔥 streak of days in a row you've played.
 
+## Coins and skins
+
+Every game earns 🪙 1 coin per 10 points. Spend coins in the **🛒 Skins** shop (on the start and game-over screens) to unlock new snake looks: Ocean, Fire, Candy, Midnight, Gold, and an animated Rainbow. You buy each skin once and can switch skins anytime.
+
 ## Rules
 
 - 🍎 **Red apple**: +10 points, and the snake grows by one. The snake speeds up with every apple.
