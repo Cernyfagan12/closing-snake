@@ -1,6 +1,6 @@
 # Closing Snake
 
-A browser Snake game where the arena keeps shrinking. Every 15 seconds the walls move in by one cell, until the arena is 9×9.
+A browser Snake game where the arena keeps shrinking. Every 15 seconds (on Normal) the walls move in by one cell, until the arena is 9×9.
 
 ## How to play
 
@@ -11,6 +11,16 @@ Open `index.html` in any modern browser. You don't need to build or install anyt
 | Move | Arrow keys or WASD (swipe on a phone) |
 | Start / pause / resume | Space |
 | Mute / unmute | M, or the 🔊 button (remembered between visits) |
+
+## Difficulty
+
+Pick a level on the start or game-over screen. Each level keeps its own best score.
+
+| Level | Walls close every | Snake speed |
+| --- | --- | --- |
+| Easy | 20 s | slower |
+| Normal | 15 s | standard |
+| Hard | 10 s | faster |
 
 ## Rules
 
