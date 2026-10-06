@@ -297,9 +297,11 @@
       <p><span class="coin"></span> <b id="shopCoins">0</b> coins. You earn <span id="coinRate">1 coin for every 10 points</span>.</p>
       <div class="tabs" role="tablist">
         <button id="tabSkins" role="tab" aria-selected="true">Skins</button>
+        <button id="tabTrails" role="tab" aria-selected="false">Trails</button>
         <button id="tabUpgrades" role="tab" aria-selected="false">Upgrades</button>
       </div>
       <div class="skins" id="skinList"></div>
+      <div class="skins" id="trailList" style="display: none"></div>
       <div class="upgrades" id="upgradeList" style="display: none"></div>
       <button id="shopClose">Back</button>
     </div>
@@ -418,6 +420,20 @@
     midnight: {name: 'Midnight', price: 120, head: '#e2dcff', body: '#7c5cff', tail: '#3a2bff'},
     gold:     {name: 'Gold',     price: 200, head: '#fff6c9', body: '#ffd23f', tail: '#ff9a00'},
     rainbow:  {name: 'Rainbow',  price: 300, head: '#ffffff', body: '#ff3864', tail: '#00f0ff', rainbow: true},
+    // effect skins (fx is handled in drawSnake)
+    plasma:   {name: 'Plasma',   price: 400, head: '#e8fffe', body: '#00ffd5', tail: '#7a5cff', fx: 'pulse'},
+    glitch:   {name: 'Glitch',   price: 500, head: '#ffffff', body: '#ff2bd6', tail: '#00f0ff', fx: 'glitch'},
+    galaxy:   {name: 'Galaxy',   price: 650, head: '#e0d6ff', body: '#5b3bff', tail: '#1a0640', fx: 'stars'},
+    // rebirth rewards: free once you've reborn enough times
+    prism:    {name: 'Prism',    price: 0, rebirth: 1, head: '#ffffff', body: '#ffd1f0', tail: '#c9fdff', prism: true},
+    void:     {name: 'Void',     price: 0, rebirth: 3, head: '#2a0a4a', body: '#0d0118', tail: '#000000', glow: '#b04dff', fx: 'void'},
+  };
+  const TRAILS = {               // particles left behind the tail as the snake moves
+    none:     {name: 'None',     price: 0,   colors: []},
+    sparks:   {name: 'Sparks',   price: 80,  colors: ['#00f0ff', '#ff2bd6']},
+    embers:   {name: 'Embers',   price: 120, colors: ['#ff8a00', '#ff2b4a', '#ffd23f'], rise: true},
+    bubbles:  {name: 'Bubbles',  price: 150, colors: ['#9ad8ff', '#d2ecff'], shape: 'ring', rise: true},
+    stardust: {name: 'Stardust', price: 220, colors: ['#fff6c9', '#ffd23f', '#ffffff'], shape: 'star'},
   };
   const store = {                // JSON in localStorage; falls back to defaults if storage is blocked
     get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -427,8 +443,15 @@
   let owned = store.get('closingSnakeSkins', ['classic']);
   if (!Array.isArray(owned)) owned = ['classic'];
   let skinId = store.get('closingSnakeSkin', 'classic');
-  if (!SKINS[skinId] || !owned.includes(skinId)) skinId = 'classic';
-  const skin = () => SKINS[skinId];
+  // rebirth skins aren't in `owned`; they're checked against the rebirth count (hasSkin) when used
+  if (!SKINS[skinId] || !(owned.includes(skinId) || SKINS[skinId].rebirth)) skinId = 'classic';
+  const skin = () => hasSkin(skinId) ? SKINS[skinId] : SKINS.classic;
+  const hasSkin = id => owned.includes(id) || (SKINS[id].rebirth > 0 && rebirths >= SKINS[id].rebirth);
+
+  let ownedTrails = store.get('closingSnakeTrails', ['none']);
+  if (!Array.isArray(ownedTrails)) ownedTrails = ['none'];
+  let trailId = store.get('closingSnakeTrail', 'none');
+  if (!TRAILS[trailId] || !ownedTrails.includes(trailId)) trailId = 'none';
 
   function updateCoins() {
     $('coins').textContent = coins;
@@ -515,37 +538,50 @@
   let shopTab = 'skins';
   function renderShop() {
     updateCoins();
-    $('tabSkins').setAttribute('aria-selected', shopTab === 'skins');
-    $('tabUpgrades').setAttribute('aria-selected', shopTab === 'upgrades');
+    ['skins', 'trails', 'upgrades'].forEach(tab => {
+      const cap = tab[0].toUpperCase() + tab.slice(1);
+      $('tab' + cap).setAttribute('aria-selected', shopTab === tab);
+    });
     $('skinList').style.display = shopTab === 'skins' ? '' : 'none';
+    $('trailList').style.display = shopTab === 'trails' ? '' : 'none';
     $('upgradeList').style.display = shopTab === 'upgrades' ? '' : 'none';
     renderUpgrades();
-    const list = $('skinList');
+    renderCards($('skinList'), SKINS, skinId, hasSkin, (id, sk) =>
+      sk.rainbow || sk.prism ? 'linear-gradient(90deg, #ff3864, #ffd23f, #39ff88, #00f0ff, #b04dff)'
+      : sk.fx === 'void' ? `linear-gradient(90deg, ${sk.tail}, ${sk.glow}, ${sk.tail})`
+      : `linear-gradient(90deg, ${sk.head}, ${sk.body}, ${sk.tail})`,
+      id => { owned.push(id); store.set('closingSnakeSkins', owned); },
+      id => { skinId = id; store.set('closingSnakeSkin', id); });
+    renderCards($('trailList'), TRAILS, trailId, id => ownedTrails.includes(id), (id, t) =>
+      t.colors.length ? `linear-gradient(90deg, ${t.colors.join(', ')})` : 'linear-gradient(90deg, #1a1f38, #1a1f38)',
+      id => { ownedTrails.push(id); store.set('closingSnakeTrails', ownedTrails); },
+      id => { trailId = id; store.set('closingSnakeTrail', id); });
+  }
+
+  // One shop grid (skins or trails): buy with coins, or equip what you own.
+  function renderCards(list, items, equippedId, isOwned, swatchOf, addOwned, equip) {
     list.textContent = '';
-    Object.entries(SKINS).forEach(([id, sk]) => {
-      const have = owned.includes(id), on = id === skinId;
+    Object.entries(items).forEach(([id, it]) => {
+      const have = isOwned(id), on = id === equippedId;
+      const rebirthLocked = !have && it.rebirth > 0;
       const b = document.createElement('button');
       b.className = 'skin' + (on ? ' equipped' : '');
-      b.disabled = !have && coins < sk.price;
+      b.disabled = !have && (rebirthLocked || coins < it.price);
       const swatch = document.createElement('span');
-      swatch.className = 'swatch';
-      swatch.style.background = sk.rainbow
-        ? 'linear-gradient(90deg, #ff5d6c, #ffc940, #4fd18b, #3fa9f5, #9fa8ff)'
-        : `linear-gradient(90deg, ${sk.head}, ${sk.body}, ${sk.tail})`;
+      swatch.className = 'swatch' + (it.fx ? ' fx' : '');
+      swatch.style.background = swatchOf(id, it);
       const name = document.createElement('span');
-      name.textContent = sk.name;
+      name.textContent = it.name + (it.fx ? ' ✦' : '');
       const status = document.createElement('span');
-      status.textContent = on ? '✓ Equipped' : have ? 'Equip' : `🪙 ${sk.price}`;
+      status.textContent = on ? '✓ Equipped' : have ? 'Equip' : rebirthLocked ? `🌟 Rebirth ${it.rebirth}` : `🪙 ${it.price}`;
       b.append(swatch, name, status);
       b.addEventListener('click', () => {
-        if (!owned.includes(id)) {   // buy it
-          if (!spend(sk.price)) return;
-          owned.push(id);
-          store.set('closingSnakeSkins', owned);
+        if (!isOwned(id)) {          // buy it
+          if (rebirthLocked || !spend(it.price)) return;
+          addOwned(id);
           checkAchievements();
         }
-        skinId = id;
-        store.set('closingSnakeSkin', id);
+        equip(id);
         renderShop();
       });
       list.append(b);
@@ -905,6 +941,7 @@
     s.prev = s.snake.map(p => ({...p}));   // where each segment was, for smooth drawing
     s.snake.unshift(head);
     if (s.grow > 0) s.grow--; else s.snake.pop();
+    emitTrail(s.prev[s.prev.length - 1]);  // the trail starts where the tail just was
 
     if (exit) {
       stats.portals++; saveStats(); checkAchievements();
@@ -1059,7 +1096,8 @@
   // --- loop ---
   function frame(now) {
     if (running && !paused) {
-      const dt = Math.min(100, now - lastFrame);
+      // never step backwards: the first frame after Play can be timestamped just before start()
+      const dt = Math.max(0, Math.min(100, now - lastFrame));
       lastFrame = now;
       s.time += dt;
       acc += dt;
@@ -1102,6 +1140,7 @@
     drawPortals(now);
     if (s.food) drawApple(s.food, now);
     if (s.gold) drawGold(s.gold, now);
+    drawTrail(now);
     drawSnake(now);
     drawVignette();
     if (s.deadAt && now - s.deadAt < 300) {          // red flash when you crash
@@ -1310,7 +1349,7 @@
 
   function drawSnake(now) {
     // Slide each segment from where it was to where it is, so movement looks smooth.
-    const f = running ? Math.min(1, acc / tickMs()) : 1;
+    const f = running ? Math.max(0, Math.min(1, acc / tickMs())) : 1;
     const pts = s.snake.map((p, i) => {
       let q = s.prev[i] || s.prev[s.prev.length - 1] || p;
       if (Math.abs(q.x - p.x) + Math.abs(q.y - p.y) > 1) q = p;   // just went through a portal: don't slide across the board
@@ -1318,10 +1357,18 @@
     });
     const ghost = hasPower('ghost'), n = pts.length;
     const radius = i => C * (0.42 - 0.16 * i / Math.max(1, n - 1));
-    const sk = skin();
+    const sk = skin(), fx = ghost ? null : sk.fx;
+    const glitching = fx === 'glitch' && now % 1400 < 160;          // a short glitch burst every 1.4 s
     const color = i => ghost ? colors['--ghost']
       : sk.rainbow ? `hsl(${(i * 24 + now / 8) % 360}, 100%, 60%)`
+      : sk.prism ? `hsl(${(i * 14 + now / 12) % 360}, 100%, 82%)`
+      : glitching && i % 2 ? sk.tail
       : mix(sk.body, sk.tail, i / Math.max(1, n - 1));
+    const glowColor = i => fx === 'void' ? sk.glow : color(i);
+    if (glitching) {                                                 // knock segments sideways
+      const tick = Math.floor(now / 40);
+      pts.forEach((p, i) => { const j = ((i * 7919 + tick * 31) % 9) - 4; p.x += j * 1.6; p.y -= j * 0.6; });
+    }
 
     // Death animation: segments burst one by one, head first, after a short pause.
     let first = 0;
@@ -1341,7 +1388,8 @@
       for (let i = n - 1; i > first; i--) {
         ctx.strokeStyle = styleOf(i);
         ctx.lineWidth = widthOf(i);
-        if (Math.abs(pts[i].x - pts[i - 1].x) + Math.abs(pts[i].y - pts[i - 1].y) > C * 1.5) continue;   // split by a portal
+        // split by a portal (neighbours are at most ~1.4 cells apart, even mid-move round a corner)
+        if (Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y) > C * 2) continue;
         ctx.beginPath(); ctx.moveTo(pts[i].x, pts[i].y); ctx.lineTo(pts[i - 1].x, pts[i - 1].y); ctx.stroke();
       }
     };
@@ -1350,13 +1398,25 @@
     ctx.globalAlpha = ghost ? 0.5 : 1;
     ctx.globalCompositeOperation = 'lighter';
     ctx.globalAlpha *= 0.22;
-    segs(i => radius(i) * 2 + C * 0.45, color);        // glow
+    if (fx === 'void') ctx.globalAlpha *= 2;           // Void: a stronger purple halo around a black body
+    segs(i => radius(i) * 2 + C * 0.45, glowColor);    // glow
     ctx.globalAlpha = ghost ? 0.5 : 1;
     ctx.globalCompositeOperation = 'source-over';
     segs(i => radius(i) * 2, color);                   // body
     ctx.globalCompositeOperation = 'lighter';
-    ctx.globalAlpha *= 0.55;
-    segs(i => radius(i) * 0.55, () => '#ffffff');      // bright core
+    ctx.globalAlpha *= fx === 'void' ? 0.25 : 0.55;
+    // bright core; Plasma sends a wave of light down the body
+    const wave = i => 0.5 + 0.5 * Math.sin(now / 140 - i * 0.7);
+    segs(i => radius(i) * (fx === 'pulse' ? 0.35 + 0.9 * wave(i) : 0.55), () => fx === 'void' ? sk.glow : '#ffffff');
+    if (fx === 'stars') {                              // Galaxy: twinkling stars inside the body
+      ctx.fillStyle = '#ffffff';
+      for (let i = Math.max(first, 1); i < n; i++) {
+        if ((i * 37) % 3) continue;
+        ctx.globalAlpha = 0.25 + 0.75 * Math.abs(Math.sin(now / 260 + i * 1.3));
+        const o = ((i * 53) % 7 - 3) * C * 0.05;
+        ctx.beginPath(); ctx.arc(pts[i].x + o, pts[i].y - o, C * 0.06, 0, Math.PI * 2); ctx.fill();
+      }
+    }
     ctx.restore();
     if (first > 0) return;                             // the head has already burst
 
@@ -1364,7 +1424,7 @@
     const h = pts[0], d = s.dir;
     ctx.save();
     ctx.globalAlpha = ghost ? 0.6 : 1;
-    ctx.shadowColor = ghost ? colors['--ghost'] : color(0); ctx.shadowBlur = 20;
+    ctx.shadowColor = ghost ? colors['--ghost'] : glowColor(0); ctx.shadowBlur = 20;
     ctx.fillStyle = sk.head;
     ctx.beginPath(); ctx.arc(h.x, h.y, C * 0.46, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
@@ -1415,6 +1475,44 @@
       const a = Math.random() * Math.PI * 2, v = 0.05 + Math.random() * 0.15;   // px per ms
       particles.push({x: cx, y: cy, vx: Math.cos(a) * v, vy: Math.sin(a) * v, color, born: now, life: 350 + Math.random() * 300});
     }
+  }
+
+  // Trail particles: dropped where the tail just was, drawn behind the snake.
+  let trail = [];
+  function emitTrail(cell) {
+    const t = TRAILS[trailId];
+    if (!t.colors.length) return;
+    const now = performance.now(), drift = REDUCED_MOTION ? 0 : 1;   // with reduced motion, particles just fade in place
+    for (let k = 0; k < 2; k++) {
+      trail.push({
+        x: cell.x * C + C / 2 + (Math.random() - 0.5) * C * 0.6, y: cell.y * C + C / 2 + (Math.random() - 0.5) * C * 0.6,
+        vx: drift * (Math.random() - 0.5) * 0.02, vy: drift * (t.rise ? -0.02 - Math.random() * 0.03 : (Math.random() - 0.5) * 0.02),
+        color: t.colors[Math.floor(Math.random() * t.colors.length)], shape: t.shape, born: now, life: 600 + Math.random() * 500,
+      });
+    }
+    if (trail.length > 160) trail.splice(0, trail.length - 160);
+  }
+
+  function drawTrail(now) {
+    trail = trail.filter(p => now - p.born < p.life);
+    if (!trail.length) return;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    trail.forEach(p => {
+      const t = Math.max(0, now - p.born), k = 1 - t / p.life, x = p.x + p.vx * t, y = p.y + p.vy * t, r = C * 0.12 * (0.5 + k);
+      ctx.globalAlpha = k * 0.85;
+      ctx.fillStyle = ctx.strokeStyle = p.color;
+      if (p.shape === 'ring') {
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(x, y, r * 1.4, 0, Math.PI * 2); ctx.stroke();
+      } else if (p.shape === 'star') {                  // a little 4-point sparkle
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(x - r * 1.6, y); ctx.lineTo(x + r * 1.6, y); ctx.moveTo(x, y - r * 1.6); ctx.lineTo(x, y + r * 1.6); ctx.stroke();
+      } else {
+        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+      }
+    });
+    ctx.restore();
   }
 
   function popup(cell, text, color) {
@@ -1572,6 +1670,7 @@
   $('shopClose').addEventListener('click', e => { e.currentTarget.blur(); closeShop(); });
   $('tabSkins').addEventListener('click', e => { e.currentTarget.blur(); shopTab = 'skins'; renderShop(); });
   $('tabUpgrades').addEventListener('click', e => { e.currentTarget.blur(); shopTab = 'upgrades'; renderShop(); });
+  $('tabTrails').addEventListener('click', e => { e.currentTarget.blur(); shopTab = 'trails'; renderShop(); });
 
   setMuted(muted);
   $('pauseBtn').innerHTML = ICONS.pause;

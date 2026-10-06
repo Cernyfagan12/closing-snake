@@ -61,7 +61,19 @@ Press **🗺️ Stages** to play through 14 stages in two worlds. Eat the goal n
 
 Every game earns 🪙 1 coin per 10 points. Spend coins in the **🛒 Shop** (on the start and game-over screens).
 
-**Skins:** Ocean, Fire, Candy, Midnight, Gold, and an animated Rainbow. You buy each skin once and can switch skins anytime.
+**Skins:** Ocean, Fire, Candy, Midnight, Gold and an animated Rainbow, plus effect skins (marked ✦):
+
+| Skin | Effect | How to get it |
+| --- | --- | --- |
+| Plasma ✦ | a wave of light pulses down the body | 400 coins |
+| Glitch ✦ | flickers and jumps sideways now and then | 500 coins |
+| Galaxy ✦ | deep purple with twinkling stars inside | 650 coins |
+| Prism | soft drifting rainbow | free at 🌟 Rebirth 1 |
+| Void ✦ | a black body with a purple halo | free at 🌟 Rebirth 3 |
+
+**Trails:** effects left behind the snake as it moves: Sparks (80), Embers (120), Bubbles (150) and Stardust (220).
+
+You buy each skin or trail once and can switch anytime.
 
 **Upgrades:**
 
