@@ -19,29 +19,41 @@
     --apple: #ff5d6c;
     --gold: #ffc940;
     --ghost: #9fa8ff;
+    /* board size: fit the width, and leave room for the title + HUD above it */
+    --size: min(92vw, 520px, max(260px, calc(100vh - 210px)));
+  }
+  @media (pointer: coarse) {
+    /* touch screens also need room for the D-pad below the board */
+    :root { --size: min(94vw, 520px, max(240px, calc(100vh - 330px))); }
   }
   * { box-sizing: border-box; }
   body {
     margin: 0; min-height: 100vh; background: var(--bg); color: var(--text);
     font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
-    padding: 16px; user-select: none;
+    padding: 16px; user-select: none; -webkit-user-select: none;
+    overscroll-behavior: none;   /* no pull-to-refresh while swiping */
+    -webkit-tap-highlight-color: transparent;
   }
   h1 { margin: 0 0 4px; font-size: 1.6rem; letter-spacing: .02em; }
   .sub { color: var(--muted); margin: 0 0 14px; font-size: .9rem; text-align: center; }
   .hud {
-    display: flex; gap: 18px; justify-content: space-between; width: min(92vw, 520px);
+    display: flex; gap: 12px; justify-content: space-between; width: var(--size);
     background: var(--panel); padding: 10px 16px; border-radius: 10px; margin-bottom: 10px;
     font-variant-numeric: tabular-nums;
   }
   .hud div span { display: block; font-size: .7rem; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
   .hud div b { font-size: 1.2rem; }
-  .wrap { position: relative; width: min(92vw, 520px); aspect-ratio: 1; }
+  .wrap { position: relative; width: var(--size); aspect-ratio: 1; touch-action: none; }
   canvas { width: 100%; height: 100%; display: block; border-radius: 10px; background: var(--board); touch-action: none; }
   .overlay {
-    position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
-    background: rgba(10, 14, 22, .82); border-radius: 10px; text-align: center; padding: 20px;
+    position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    background: rgba(10, 14, 22, .82); border-radius: 10px; text-align: center; padding: 16px;
+    overflow-y: auto; touch-action: pan-y;   /* menus scroll if they don't fit a small board */
   }
+  /* centre the content, but let it scroll from the top when it's taller than the board */
+  .overlay > :first-child { margin-top: auto; }
+  .overlay > :last-child { margin-bottom: auto; }
   .overlay.hidden { display: none; }
   .overlay h2 { margin: 0 0 8px; font-size: 1.8rem; }
   .overlay h2.best { color: var(--gold); font-size: 2.2rem; }
@@ -73,19 +85,56 @@
   .skin .swatch { width: 100%; height: 16px; border-radius: 8px; }
   .skin.equipped { border-color: var(--snake); }
   .skin:disabled { opacity: .45; cursor: not-allowed; filter: none; }
-  .overlay .daily-info { color: var(--gold); font-size: .85rem; margin-top: 8px; min-height: 1.2em; }
+  .overlay .daily-info { color: var(--gold); font-size: .85rem; margin-top: 8px; }
+  .overlay .daily-info:empty { display: none; }
+  .hud-btns { display: flex; gap: 6px; align-self: center; }
+  button { touch-action: manipulation; }   /* no double-tap zoom on buttons */
+  .dpad {
+    display: none; grid-template-columns: repeat(3, 64px); grid-template-rows: repeat(2, 56px); gap: 8px;
+    margin-top: 6px; touch-action: none;
+  }
+  .dpad button {
+    margin: 0; padding: 0; font-size: 1.4rem; background: var(--panel); color: var(--text);
+    border: 1px solid var(--wall); border-radius: 12px;
+  }
+  .dpad button:active { background: var(--snake); color: #08130d; }
+  .dpad [data-dir="up"] { grid-column: 2; grid-row: 1; }
+  .dpad [data-dir="left"] { grid-column: 1; grid-row: 2; }
+  .dpad [data-dir="down"] { grid-column: 2; grid-row: 2; }
+  .dpad [data-dir="right"] { grid-column: 3; grid-row: 2; }
+  @media (pointer: coarse) {
+    .dpad { display: grid; }
+    .keys { display: none; }       /* keyboard hints are useless on a phone */
+  }
+  @media (max-width: 480px) {
+    body { padding: 10px; }
+    h1 { font-size: 1.3rem; }
+    .sub { font-size: .8rem; margin-bottom: 8px; }
+    .hud { padding: 8px 12px; }
+    .hud div b { font-size: 1.05rem; }
+    .overlay h2 { font-size: 1.4rem; }
+    .overlay h2.best { font-size: 1.7rem; }
+    .overlay p { font-size: .85rem; }
+    .legend { font-size: .75rem; margin: 8px 0; }
+    .levels button { padding: 6px 9px; font-size: .85rem; }
+    button { margin-top: 10px; padding: 9px 22px; }
+    .power { margin-top: 6px; min-height: 18px; }
+  }
   kbd { background: var(--panel); border: 1px solid var(--wall); border-radius: 4px; padding: 0 5px; font-size: .8rem; }
 </style>
 </head>
 <body>
   <h1>Closing Snake</h1>
-  <p class="sub">The walls move in every <span id="wallSecs">15</span> seconds. Golden apples give you powers. <kbd>Space</kbd> pauses, <kbd>M</kbd> mutes.</p>
+  <p class="sub">The walls move in every <span id="wallSecs">15</span> seconds. Golden apples give you powers.<span class="keys"> <kbd>Space</kbd> pauses, <kbd>M</kbd> mutes.</span></p>
 
   <div class="hud">
     <div><span>Score</span><b id="score">0</b></div>
     <div><span id="bestLabel">Best</span><b id="best">0</b></div>
     <div><span>Walls in</span><b id="wallTimer">15</b></div>
-    <button class="mute" id="muteBtn" aria-label="Mute sound" title="Mute (M)">🔊</button>
+    <div class="hud-btns">
+      <button class="mute" id="pauseBtn" aria-label="Pause" title="Pause (Space)">⏸</button>
+      <button class="mute" id="muteBtn" aria-label="Mute sound" title="Mute (M)">🔊</button>
+    </div>
   </div>
 
   <div class="wrap">
@@ -117,6 +166,12 @@
     </div>
   </div>
   <div class="power" id="power"></div>
+  <div class="dpad" id="dpad" aria-label="Direction buttons">
+    <button data-dir="up" aria-label="Up">▲</button>
+    <button data-dir="left" aria-label="Left">◀</button>
+    <button data-dir="down" aria-label="Down">▼</button>
+    <button data-dir="right" aria-label="Right">▶</button>
+  </div>
 
 <script>
 (() => {
@@ -136,6 +191,7 @@
   const ctx = canvas.getContext('2d');
   const C = canvas.width / N;
   const $ = id => document.getElementById(id);
+  const isTouch = window.matchMedia('(pointer: coarse)').matches;
   const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   const colors = {};
   ['--text','--board','--grid','--wall','--warn','--snake','--snake-head','--apple','--gold','--ghost'].forEach(k => colors[k] = css(k));
@@ -341,7 +397,7 @@
       const pts = addScore(10);
       burst(head, colors['--apple'], 14);
       popup(head, '+' + pts, colors['--text']);
-      beep(520, 0.06);
+      beep(520, 0.06); buzz(15);
       s.food = freeCell(rng.food);
       if (!s.gold && rng.gold() < 0.35) {
         const g = freeCell(rng.gold);
@@ -353,7 +409,7 @@
       const pts = addScore(25);
       burst(head, colors['--gold'], 24);
       popup(head, '+' + pts, colors['--gold']);
-      grantPower();
+      grantPower(); buzz(30);
     }
   }
 
@@ -395,7 +451,7 @@
 
   function gameOver(reason) {
     running = false;
-    beep(110, 0.3);
+    beep(110, 0.3); buzz([60, 40, 90]);
     shakeUntil = performance.now() + SHAKE_TIME;
     burst(s.snake[0], colors['--warn'], 30);
     if (level === 'daily') { recordDailyPlay(); updateDailyInfo(); }
@@ -408,7 +464,7 @@
     const earned = Math.floor(s.score / 10);
     addCoins(earned);
     const bestLabel = level === 'daily' ? 'Best today' : `Best on ${L().name}`;
-    const text = `${reason} Score: ${s.score} · ${bestLabel}: ${best} · 🪙 +${earned}. Press Space to play again.`;
+    const text = `${reason} Score: ${s.score} · ${bestLabel}: ${best} · 🪙 +${earned}. ${isTouch ? 'Tap Play again.' : 'Press Space to play again.'}`;
     overlayTimer = setTimeout(() =>
       showOverlay(record ? '🏆 New best!' : 'Game over', text, 'Play again', false, record), DEATH_PAUSE);
   }
@@ -437,12 +493,15 @@
     $('score').textContent = 0;
     $('overlay').classList.add('hidden');
     running = true; paused = false; acc = 0; lastFrame = performance.now();
+    $('pauseBtn').textContent = '⏸';
   }
 
   function togglePause() {
     if (!running) return;
     paused = !paused;
-    if (paused) showOverlay('Paused', 'Press Space or the button to resume.', 'Resume', false);
+    $('pauseBtn').textContent = paused ? '▶' : '⏸';
+    $('pauseBtn').setAttribute('aria-label', paused ? 'Resume' : 'Pause');
+    if (paused) showOverlay('Paused', isTouch ? 'Tap Resume to keep playing.' : 'Press Space or the button to resume.', 'Resume', false);
     else { $('overlay').classList.add('hidden'); lastFrame = performance.now(); }
   }
 
@@ -748,6 +807,27 @@
     setLevel(b.dataset.level);
     b.blur();                   // so Space starts the game instead of re-clicking the button
   }));
+
+  // --- touch ---
+  function buzz(pattern) {      // short vibration on phones; muting turns it off too
+    if (muted || !navigator.vibrate) return;
+    try { navigator.vibrate(pattern); } catch (e) {}
+  }
+
+  const DIRS = {up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0]};
+  document.querySelectorAll('#dpad button').forEach(b => b.addEventListener('pointerdown', e => {
+    e.preventDefault();         // react on touch-down, not on release
+    unlockAudio();
+    turn(...DIRS[b.dataset.dir]);
+  }));
+
+  $('pauseBtn').addEventListener('click', e => {
+    e.currentTarget.blur();
+    unlockAudio();
+    togglePause();
+  });
+
+  if (isTouch) $('ovText').textContent = 'Swipe on the board or use the arrow buttons below it.';
 
   $('muteBtn').addEventListener('click', e => {
     setMuted(!muted);
