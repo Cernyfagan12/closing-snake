@@ -25,6 +25,20 @@ Pick a level on the start or game-over screen. Each level keeps its own best sco
 
 **Daily challenge:** the date picks the apples, so everyone gets the same apples in the same order that day. It keeps a separate "best today" score that resets at midnight, plus a 🔥 streak of days in a row you've played.
 
+## 🗺️ Stages
+
+Press **🗺️ Stages** to play through 7 stages with rock obstacles. Eat the goal number of apples to clear a stage. You earn bonus coins and unlock the next stage. The walls still close in, so be quick!
+
+| # | Stage | Goal |
+| --- | --- | --- |
+| 1 | Warm-up | 5 🍎 |
+| 2 | Pillars | 8 🍎 |
+| 3 | Bars | 10 🍎 |
+| 4 | Columns | 12 🍎 |
+| 5 | Corners | 14 🍎 |
+| 6 | Fortress | 16 🍎 |
+| 7 | Zigzag | 18 🍎 |
+
 ## Coins, skins and upgrades
 
 Every game earns 🪙 1 coin per 10 points. Spend coins in the **🛒 Shop** (on the start and game-over screens).
