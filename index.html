@@ -85,6 +85,16 @@
   .skin .swatch { width: 100%; height: 16px; border-radius: 8px; }
   .skin.equipped { border-color: var(--snake); }
   .skin:disabled { opacity: .45; cursor: not-allowed; filter: none; }
+  .tabs { display: flex; gap: 6px; margin-top: 8px; }
+  .tabs button { margin: 0; padding: 6px 14px; background: transparent; color: var(--text); border: 1px solid var(--wall); }
+  .tabs button[aria-selected="true"] { background: var(--snake); color: #08130d; border-color: var(--snake); }
+  .upgrades { display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 420px; margin-top: 10px; }
+  .upgrade { display: flex; align-items: center; gap: 10px; background: var(--panel); border-radius: 8px; padding: 8px 10px; text-align: left; }
+  .upgrade .info { flex: 1; display: flex; flex-direction: column; gap: 2px; font-size: .85rem; }
+  .upgrade small { color: var(--muted); }
+  .upgrade .pips { color: var(--gold); letter-spacing: 2px; font-size: .75rem; }
+  .upgrade button { margin: 0; padding: 6px 12px; white-space: nowrap; }
+  .upgrade button:disabled { opacity: .45; cursor: not-allowed; filter: none; }
   .overlay .daily-info { color: var(--gold); font-size: .85rem; margin-top: 8px; }
   .overlay .daily-info:empty { display: none; }
   .hud-btns { display: flex; gap: 6px; align-self: center; }
@@ -156,12 +166,17 @@
       </div>
       <p class="daily-info" id="dailyInfo"></p>
       <button id="startBtn">Play</button>
-      <button class="shop-btn" id="shopBtn">🛒 Skins · 🪙 <span id="coins">0</span></button>
+      <button class="shop-btn" id="shopBtn">🛒 Shop · 🪙 <span id="coins">0</span></button>
     </div>
     <div class="overlay shop hidden" id="shop" role="dialog" aria-label="Skin shop">
-      <h2>🛒 Skin shop</h2>
+      <h2>🛒 Shop</h2>
       <p>🪙 <b id="shopCoins">0</b> coins. You earn 1 coin for every 10 points.</p>
+      <div class="tabs" role="tablist">
+        <button id="tabSkins" role="tab" aria-selected="true">🎨 Skins</button>
+        <button id="tabUpgrades" role="tab" aria-selected="false">⚡ Upgrades</button>
+      </div>
       <div class="skins" id="skinList"></div>
+      <div class="upgrades" id="upgradeList" style="display: none"></div>
       <button id="shopClose">Back</button>
     </div>
   </div>
@@ -289,12 +304,53 @@
     updateCoins();
   }
 
+  function spend(price) {        // pay with coins; false if you can't afford it
+    if (coins < price) return false;
+    coins -= price;
+    store.set('closingSnakeCoins', coins);
+    unlockAudio(); beep(660, 0.06); setTimeout(() => beep(990, 0.1), 80);
+    return true;
+  }
+
+  // --- upgrades ---
+  const UPGRADES = {             // each level costs the next price in the list
+    power: {name: '⏱️ Longer powers',      prices: [40, 80, 150],  what: 'Powers last',         value: n => `${POWER_TIME / 1000 + 2 * n}s`},
+    gold:  {name: '⭐ More golden apples', prices: [50, 100, 180], what: 'Golden apple chance', value: n => `${35 + 10 * n}%`},
+  };
+  const SHIELD_PRICE = 25, MAX_SHIELDS = 5;
+  let upgrades = store.get('closingSnakeUpgrades', {});
+  if (typeof upgrades !== 'object' || upgrades === null) upgrades = {};
+  const upg = k => Math.min(UPGRADES[k].prices.length, Number(upgrades[k]) || 0);
+  let shields = Math.min(MAX_SHIELDS, Number(store.get('closingSnakeShields', 0)) || 0);
+
+  const powerTime = () => POWER_TIME + 2000 * upg('power');
+  const goldChance = () => 0.35 + 0.1 * upg('gold');
+
+  function useShield() {          // spend this game's shield to survive a crash
+    if (!s.shield) return false;
+    s.shield = false;
+    shields--;
+    store.set('closingSnakeShields', shields);
+    s.graceUntil = s.time + 1200;
+    flashPower('🛡️ Shield saved you! Turn away!', 1800);
+    burst(s.snake[0], colors['--gold'], 24);
+    beep(330, 0.08); setTimeout(() => beep(660, 0.12), 90);
+    buzz(40);
+    return true;
+  }
+
   const shopOpen = () => !$('shop').classList.contains('hidden');
   function openShop() { if (running) return; renderShop(); $('shop').classList.remove('hidden'); }
   function closeShop() { $('shop').classList.add('hidden'); }
 
+  let shopTab = 'skins';
   function renderShop() {
     updateCoins();
+    $('tabSkins').setAttribute('aria-selected', shopTab === 'skins');
+    $('tabUpgrades').setAttribute('aria-selected', shopTab === 'upgrades');
+    $('skinList').style.display = shopTab === 'skins' ? '' : 'none';
+    $('upgradeList').style.display = shopTab === 'upgrades' ? '' : 'none';
+    renderUpgrades();
     const list = $('skinList');
     list.textContent = '';
     Object.entries(SKINS).forEach(([id, sk]) => {
@@ -314,12 +370,9 @@
       b.append(swatch, name, status);
       b.addEventListener('click', () => {
         if (!owned.includes(id)) {   // buy it
-          if (coins < sk.price) return;
-          coins -= sk.price;
+          if (!spend(sk.price)) return;
           owned.push(id);
-          store.set('closingSnakeCoins', coins);
           store.set('closingSnakeSkins', owned);
-          unlockAudio(); beep(660, 0.06); setTimeout(() => beep(990, 0.1), 80);
         }
         skinId = id;
         store.set('closingSnakeSkin', id);
@@ -327,6 +380,41 @@
       });
       list.append(b);
     });
+  }
+
+  function upgradeRow(title, desc, pips, price, onBuy) {
+    const row = document.createElement('div');
+    row.className = 'upgrade';
+    const info = document.createElement('div');
+    info.className = 'info';
+    const t = document.createElement('b'); t.textContent = title;
+    const d = document.createElement('small'); d.textContent = desc;
+    const p = document.createElement('span'); p.className = 'pips'; p.textContent = pips;
+    info.append(t, d, p);
+    const b = document.createElement('button');
+    b.textContent = price === null ? 'MAX' : `🪙 ${price}`;
+    b.disabled = price === null || coins < price;
+    b.addEventListener('click', () => { if (price !== null && spend(price)) { onBuy(); renderShop(); } });
+    row.append(info, b);
+    return row;
+  }
+
+  function renderUpgrades() {
+    const list = $('upgradeList');
+    list.textContent = '';
+    Object.entries(UPGRADES).forEach(([id, u]) => {
+      const n = upg(id), max = u.prices.length;
+      const desc = `${u.what}: ${u.value(n)}` + (n < max ? ` → ${u.value(n + 1)}` : ' (max)');
+      list.append(upgradeRow(u.name, desc, '●'.repeat(n) + '○'.repeat(max - n), n < max ? u.prices[n] : null, () => {
+        upgrades[id] = n + 1;
+        store.set('closingSnakeUpgrades', upgrades);
+      }));
+    });
+    list.append(upgradeRow('🛡️ Shield', `Saves you from one crash, then it's used up. You have ${shields}/${MAX_SHIELDS}.`,
+      '🛡️'.repeat(shields), shields < MAX_SHIELDS ? SHIELD_PRICE : null, () => {
+        shields++;
+        store.set('closingSnakeShields', shields);
+      }));
   }
 
   let s; // game state
@@ -347,6 +435,8 @@
       gold: null,           // {x, y, born}
       power: null,          // {type, until}
       time: 0,
+      shield: false,        // armed at start() if you own a shield
+      graceUntil: 0,        // after a shield saves you, crashes are ignored until this time
     };
     s.prev = s.snake.map(p => ({...p}));
     s.food = freeCell(rng.food);
@@ -382,10 +472,15 @@
     if (s.queue.length) s.dir = s.queue.shift();
     const head = {x: s.snake[0].x + s.dir.x, y: s.snake[0].y + s.dir.y};
 
-    if (!inArena(head)) return gameOver('You hit the wall.');
     const body = s.grow > 0 ? s.snake : s.snake.slice(0, -1);
-    if (!hasPower('ghost') && body.some(p => p.x === head.x && p.y === head.y))
-      return gameOver('You bit your own tail.');
+    const crash = !inArena(head) ? 'You hit the wall.'
+      : !hasPower('ghost') && body.some(p => p.x === head.x && p.y === head.y) ? 'You bit your own tail.'
+      : null;
+    if (crash) {
+      // A shield (or the short grace after it) stops the snake instead of killing it, so you can turn away.
+      if (s.time < s.graceUntil || useShield()) { s.prev = s.snake.map(p => ({...p})); return; }
+      return gameOver(crash);
+    }
 
     s.prev = s.snake.map(p => ({...p}));   // where each segment was, for smooth drawing
     s.snake.unshift(head);
@@ -399,7 +494,7 @@
       popup(head, '+' + pts, colors['--text']);
       beep(520, 0.06); buzz(15);
       s.food = freeCell(rng.food);
-      if (!s.gold && rng.gold() < 0.35) {
+      if (!s.gold && rng.gold() < goldChance()) {
         const g = freeCell(rng.gold);
         if (g) s.gold = {...g, born: s.time};
       }
@@ -423,7 +518,7 @@
       s.wallClock = 0;
       flashPower('🧱 The walls moved back!', 1800);
     } else {
-      s.power = {type, until: s.time + POWER_TIME};
+      s.power = {type, until: s.time + powerTime()};
     }
   }
 
@@ -441,7 +536,14 @@
     if (s.inset >= MAX_INSET) return;
     s.inset++;
     beep(160, 0.15);
-    if (s.snake.some(p => !inArena(p))) return gameOver('The walls crushed you.');
+    if (s.snake.some(p => !inArena(p))) {
+      if (s.time < s.graceUntil || useShield()) {   // the shield holds this ring of walls back
+        s.inset--;
+        flashPower('🛡️ Your shield held the walls back!', 1800);
+        return;
+      }
+      return gameOver('The walls crushed you.');
+    }
     if (s.food && !inArena(s.food)) s.food = freeCell(rng.food);
     if (s.gold && !inArena(s.gold)) s.gold = null;
   }
@@ -489,6 +591,7 @@
       ? {food: seededRandom(seed + '-food'), gold: seededRandom(seed + '-gold'), power: seededRandom(seed + '-power')}
       : {food: Math.random, gold: Math.random, power: Math.random};
     reset();
+    s.shield = shields > 0;
     flashMsg = null;            // don't carry a power message into the new game
     $('score').textContent = 0;
     $('overlay').classList.add('hidden');
@@ -531,6 +634,7 @@
       const left = Math.ceil((s.power.until - s.time) / 1000);
       msg = {slow: '🐢 Slow-mo', ghost: '👻 Ghost: pass through yourself', double: '✖2 Double points'}[s.power.type] + ` · ${left}s`;
     }
+    else if (running && s.shield) msg = '🛡️ Shield ready';
     $('power').textContent = msg;
   }
 
@@ -836,6 +940,8 @@
 
   $('shopBtn').addEventListener('click', e => { e.currentTarget.blur(); openShop(); });
   $('shopClose').addEventListener('click', e => { e.currentTarget.blur(); closeShop(); });
+  $('tabSkins').addEventListener('click', e => { e.currentTarget.blur(); shopTab = 'skins'; renderShop(); });
+  $('tabUpgrades').addEventListener('click', e => { e.currentTarget.blur(); shopTab = 'upgrades'; renderShop(); });
 
   setMuted(muted);
   updateCoins();
