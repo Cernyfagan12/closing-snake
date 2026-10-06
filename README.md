@@ -27,7 +27,9 @@ Pick a level on the start or game-over screen. Each level keeps its own best sco
 
 ## 🗺️ Stages
 
-Press **🗺️ Stages** to play through 7 stages with rock obstacles. Eat the goal number of apples to clear a stage. You earn bonus coins and unlock the next stage. The walls still close in, so be quick!
+Press **🗺️ Stages** to play through 14 stages in two worlds. Eat the goal number of apples to clear a stage. You earn bonus coins and unlock the next stage. The walls still close in, so be quick!
+
+**World 1 · Neon City:** crystal obstacles.
 
 | # | Stage | Goal |
 | --- | --- | --- |
@@ -39,9 +41,21 @@ Press **🗺️ Stages** to play through 7 stages with rock obstacles. Eat the g
 | 6 | Fortress | 16 🍎 |
 | 7 | Zigzag | 18 🍎 |
 
+**World 2 · Portal Lab:** step into a swirling portal and you come out of its partner. A portal stops working (it goes dim) once the walls close over either end.
+
+| # | Stage | Goal |
+| --- | --- | --- |
+| 8 | First Jump | 10 🍎 |
+| 9 | Crossroads | 12 🍎 |
+| 10 | Split | 14 🍎 |
+| 11 | Gatehouse | 16 🍎 |
+| 12 | Twin Rooms | 18 🍎 |
+| 13 | Zigzag Lab | 20 🍎 |
+| 14 | Core | 22 🍎 |
+
 ## 🏅 Achievements
 
-13 achievements, each paying bonus coins once: eat 1 / 50 / 250 apples, catch 10 golden apples, score 200 / 500 in one game, score 100 on Hard, survive until the walls stop closing, get saved by a shield, reach a 3-day daily streak, own 4 skins, clear all stages, and rebirth once. Press **🏅** on the start or game-over screen to see your progress.
+14 achievements, each paying bonus coins once: eat 1 / 50 / 250 apples, catch 10 golden apples, score 200 / 500 in one game, score 100 on Hard, survive until the walls stop closing, get saved by a shield, reach a 3-day daily streak, own 4 skins, clear all stages, rebirth once, and jump through 25 portals. Press **🏅** on the start or game-over screen to see your progress.
 
 ## Coins, skins and upgrades
 

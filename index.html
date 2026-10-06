@@ -164,6 +164,10 @@
     margin: 0; padding: 8px; background: var(--panel); color: var(--text); border: 1px solid rgba(127, 139, 179, .25);
     font-size: .8rem; display: flex; flex-direction: column; align-items: center; gap: 6px;
   }
+  .world-title {
+    grid-column: 1 / -1; margin: 6px 0 0; text-align: left; font-family: var(--display); font-size: .8rem;
+    text-transform: uppercase; letter-spacing: .14em; text-shadow: 0 0 10px currentColor;
+  }
   .skin .swatch { width: 100%; height: 14px; border-radius: 7px; box-shadow: 0 0 10px rgba(0, 240, 255, .3); }
   .skin.equipped { border-color: var(--cyan); box-shadow: 0 0 16px rgba(0, 240, 255, .4), inset 0 0 10px rgba(0, 240, 255, .15); }
   .skin:disabled { opacity: .4; cursor: not-allowed; filter: none; box-shadow: none; }
@@ -633,7 +637,13 @@
       return edge && Math.abs(x - mid) > gap && Math.abs(y - mid) > gap;
     });
   // The snake starts at row 10 heading right, so every layout keeps row 10 clear ahead of it.
+  // Every open cell stays reachable at every wall position (checked with portals included).
   const STAGE_SPEED = {startTick: 140, minTick: 65};
+  const WORLDS = {
+    1: {name: 'Neon City',  laser: '#ff2bd6', crystal: '#8b7bff'},
+    2: {name: 'Portal Lab', laser: '#39ff88', crystal: '#ffa53d'},
+  };
+  const theme = () => WORLDS[stage !== null ? STAGES[stage].world : 1];
   const STAGES = [
     {name: 'Warm-up',  goal: 5,  wall: 20000, blocks: []},
     {name: 'Pillars',  goal: 8,  wall: 20000, blocks: [...rect(5, 5, 6, 6), ...rect(14, 5, 15, 6), ...rect(5, 14, 6, 15), ...rect(14, 14, 15, 15)]},
@@ -643,7 +653,16 @@
                                                         ...rect(3, 17, 7, 17), ...rect(3, 13, 3, 16), ...rect(13, 17, 17, 17), ...rect(17, 13, 17, 16)]},
     {name: 'Fortress', goal: 16, wall: 16000, blocks: box(6, 14, 1)},
     {name: 'Zigzag',   goal: 18, wall: 15000, blocks: [...rect(2, 4, 12, 4), ...rect(8, 16, 18, 16), ...rect(16, 6, 16, 8), ...rect(4, 12, 4, 14), ...rect(12, 7, 12, 8)]},
-  ].map(st => ({...st, ...STAGE_SPEED}));
+    // World 2: portals. Step into one ring and you come out of its partner.
+    {world: 2, name: 'First Jump', goal: 10, wall: 18000, blocks: [], portals: [[[6, 6], [14, 14]]]},
+    {world: 2, name: 'Crossroads', goal: 12, wall: 18000, blocks: [...rect(4, 6, 8, 6), ...rect(12, 14, 16, 14)], portals: [[[4, 14], [16, 6]], [[7, 3], [13, 17]]]},
+    {world: 2, name: 'Split',      goal: 14, wall: 17000, blocks: rect(0, 12, 20, 12), portals: [[[6, 8], [14, 14]], [[14, 8], [6, 14]]]},
+    {world: 2, name: 'Gatehouse',  goal: 16, wall: 16000, blocks: box(6, 14, 1), portals: [[[10, 8], [2, 18]]]},
+    {world: 2, name: 'Twin Rooms', goal: 18, wall: 16000, blocks: rect(4, 0, 4, 20), portals: [[[3, 10], [17, 3]]]},
+    {world: 2, name: 'Zigzag Lab', goal: 20, wall: 15000, blocks: [...rect(3, 6, 9, 6), ...rect(11, 14, 17, 14), ...rect(14, 3, 14, 7), ...rect(6, 13, 6, 17)],
+                                                           portals: [[[3, 3], [17, 17]], [[17, 3], [3, 17]]]},
+    {world: 2, name: 'Core',       goal: 22, wall: 14000, blocks: [...box(5, 15, 1), ...box(8, 12, 0)], portals: [[[10, 9], [3, 3]], [[17, 17], [10, 11]]]},
+  ].map(st => ({world: 1, portals: [], ...st, ...STAGE_SPEED}));
 
   let stagesCleared = Math.min(STAGES.length, Number(store.get('closingSnakeStages', 0)) || 0);
 
@@ -654,7 +673,8 @@
     $('best').textContent = `0/${st.goal}`;
     $('wallSecs').textContent = st.wall / 1000;
     document.querySelectorAll('#levels button').forEach(b => b.setAttribute('aria-pressed', false));
-    $('dailyInfo').textContent = `🗺️ Stage ${i + 1}: ${st.name}. Eat ${st.goal} apples to clear it.`;
+    $('dailyInfo').textContent = `🗺️ ${WORLDS[st.world].name} · Stage ${i + 1}: ${st.name}. Eat ${st.goal} apples to clear it.` +
+      (st.portals.length ? ' Portals teleport you!' : '');
   }
 
   function stageClear() {
@@ -668,9 +688,11 @@
     burst(s.snake[0], colors['--gold'], 40);
     [523, 659, 784, 1047].forEach((f, k) => setTimeout(() => beep(f, 0.12), k * 110));
     buzz([30, 40, 30]);
+    const newWorld = !last && STAGES[i + 1].world !== STAGES[i].world;
     const text = last
       ? `You cleared every stage! 🪙 +${coinsWon}.`
-      : `${STAGES[i].name} cleared! 🪙 +${coinsWon}. Next up: ${STAGES[i + 1].name}.`;
+      : `${STAGES[i].name} cleared! 🪙 +${coinsWon}. ` +
+        (newWorld ? `🌍 New world unlocked: ${WORLDS[STAGES[i + 1].world].name}!` : `Next up: ${STAGES[i + 1].name}.`);
     if (!last) enterStage(i + 1);  // so "Next stage" (or Space) plays the next one
     overlayTimer = setTimeout(() =>
       showOverlay(last ? '🏆 All stages cleared!' : '🎉 Stage clear!', text, last ? 'Play again' : 'Next stage', false, true), DEATH_PAUSE);
@@ -685,6 +707,13 @@
     list.textContent = '';
     STAGES.forEach((st, i) => {
       const locked = i > stagesCleared, done = i < stagesCleared;
+      if (i === 0 || STAGES[i - 1].world !== st.world) {   // a heading at the start of each world
+        const h = document.createElement('h3');
+        h.className = 'world-title';
+        h.style.color = WORLDS[st.world].laser;
+        h.textContent = `World ${st.world} · ${WORLDS[st.world].name}`;
+        list.append(h);
+      }
       const b = document.createElement('button');
       b.className = 'skin' + (i === stage ? ' equipped' : '');
       b.disabled = locked;
@@ -707,7 +736,7 @@
   }
 
   // --- achievements: lifetime stats + one-time coin rewards ---
-  const stats = {apples: 0, golds: 0, topScore: 0, topHard: 0, squeezed: 0, shieldSaves: 0};
+  const stats = {apples: 0, golds: 0, topScore: 0, topHard: 0, squeezed: 0, shieldSaves: 0, portals: 0};
   const savedStats = store.get('closingSnakeStats', {});
   if (savedStats && typeof savedStats === 'object')
     Object.keys(stats).forEach(k => { stats[k] = Number(savedStats[k]) || 0; });
@@ -726,6 +755,7 @@
     {id: 'collector',  name: 'Collector',    desc: 'Own 4 skins',                      reward: 25,  progress: () => [owned.length, 4]},
     {id: 'explorer',   name: 'Explorer',     desc: `Clear all ${STAGES.length} stages`, reward: 100, progress: () => [stagesCleared, STAGES.length]},
     {id: 'reborn',     name: 'Reborn',       desc: 'Rebirth for the first time',       reward: 50,  progress: () => [rebirths, 1]},
+    {id: 'teleporter', name: 'Teleporter',   desc: 'Jump through 25 portals',          reward: 30,  progress: () => [stats.portals, 25]},
   ];
   let unlocked = store.get('closingSnakeAch', []);
   if (!Array.isArray(unlocked)) unlocked = [];
@@ -810,6 +840,7 @@
       deadAt: 0,            // when the snake died (death animation), 0 while alive
       popped: 0,            // how many segments the death animation has burst so far
       blocks: new Set(stage !== null ? STAGES[stage].blocks : []),   // rocks, as "x,y"
+      portals: stage !== null ? STAGES[stage].portals : [],          // pairs of [[x, y], [x, y]]
     };
     s.prev = s.snake.map(p => ({...p}));
     s.food = freeCell(rng.food);
@@ -819,8 +850,19 @@
     p.x >= inset && p.y >= inset && p.x < N - inset && p.y < N - inset;
 
   const isRock = p => s.blocks.has(p.x + ',' + p.y);
+  const isPortal = (x, y) => s.portals.some(pair => pair.some(([px, py]) => px === x && py === y));
+  // A portal works only while both of its ends are inside the arena; returns where you come out.
+  function portalExit(p) {
+    for (const [a, b] of s.portals) {
+      const live = inArena({x: a[0], y: a[1]}) && inArena({x: b[0], y: b[1]});
+      if (!live) continue;
+      if (a[0] === p.x && a[1] === p.y) return {x: b[0], y: b[1]};
+      if (b[0] === p.x && b[1] === p.y) return {x: a[0], y: a[1]};
+    }
+    return null;
+  }
   const isFree = (x, y) =>
-    !isRock({x, y}) &&
+    !isRock({x, y}) && !isPortal(x, y) &&
     !s.snake.some(p => p.x === x && p.y === y) &&
     !(s.food && s.food.x === x && s.food.y === y) &&
     !(s.gold && s.gold.x === x && s.gold.y === y);
@@ -845,7 +887,9 @@
 
   function step() {
     if (s.queue.length) s.dir = s.queue.shift();
-    const head = {x: s.snake[0].x + s.dir.x, y: s.snake[0].y + s.dir.y};
+    let head = {x: s.snake[0].x + s.dir.x, y: s.snake[0].y + s.dir.y};
+    const entry = head, exit = portalExit(head);
+    if (exit) head = exit;                   // stepping into a portal puts the head on its partner
 
     const body = s.grow > 0 ? s.snake : s.snake.slice(0, -1);
     const crash = !inArena(head) ? 'You hit the wall.'
@@ -861,6 +905,12 @@
     s.prev = s.snake.map(p => ({...p}));   // where each segment was, for smooth drawing
     s.snake.unshift(head);
     if (s.grow > 0) s.grow--; else s.snake.pop();
+
+    if (exit) {
+      stats.portals++; saveStats(); checkAchievements();
+      burst(entry, PORTAL_COLORS[0], 10); burst(exit, PORTAL_COLORS[1], 10);
+      beep(740, 0.05); setTimeout(() => beep(1110, 0.07), 60);
+    }
 
     if (s.food && head.x === s.food.x && head.y === s.food.y) {
       s.apples++;
@@ -1049,6 +1099,7 @@
     drawScanLine(now);
     drawFireflies(now);
     drawWalls();
+    drawPortals(now);
     if (s.food) drawApple(s.food, now);
     if (s.gold) drawGold(s.gold, now);
     drawSnake(now);
@@ -1090,7 +1141,7 @@
       const screen = ctx;
       ctx = layer.getContext('2d');       // the paint* helpers draw on whatever ctx is
       ctx.clearRect(0, 0, W, W);
-      paintBoard(); paintClosedArea(); paintRocks(); paintLaser(colors['--wall']);
+      paintBoard(); paintClosedArea(); paintRocks(); paintLaser(theme().laser);
       ctx = screen;
     }
     ctx.drawImage(layer, 0, 0);
@@ -1153,13 +1204,15 @@
   }
 
   function paintRocks() {
-    for (const k of s.blocks) {                        // stage rocks: glowing violet crystals
+    const crystal = theme().crystal;
+    for (const k of s.blocks) {                        // stage rocks: glowing crystals in the world's colour
       const [x, y] = k.split(',').map(Number);
       if (!inArena({x, y})) continue;
       const px = x * C, py = y * C;
-      ctx.fillStyle = 'rgba(124, 92, 255, .22)';
+      ctx.save(); ctx.globalAlpha = 0.22; ctx.fillStyle = crystal;
       ctx.fillRect(px + 3, py + 3, C - 6, C - 6);
-      neonStroke(() => { ctx.beginPath(); ctx.rect(px + 4, py + 4, C - 8, C - 8); }, '#8b7bff', 2, 0.9);
+      ctx.restore();
+      neonStroke(() => { ctx.beginPath(); ctx.rect(px + 4, py + 4, C - 8, C - 8); }, crystal, 2, 0.9);
       ctx.strokeStyle = 'rgba(255, 255, 255, .25)'; ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.moveTo(px + 8, py + C - 8); ctx.lineTo(px + C - 8, py + 8); ctx.stroke();
     }
@@ -1183,6 +1236,31 @@
     ctx.restore();
     neonStroke(() => { ctx.beginPath(); ctx.rect(a + C, a + C, w - 2 * C, w - 2 * C); }, colors['--warn'], 2, 0.3 + 0.6 * pulse);
     paintLaser(colors['--warn']);                      // and the edge turns red
+  }
+
+  const PORTAL_COLORS = ['#00f0ff', '#ffa53d'];     // each pair gets its own colour
+  function drawPortals(now) {                        // swirling dashed rings; dim when a partner is walled off
+    s.portals.forEach(([a, b], k) => {
+      const live = inArena({x: a[0], y: a[1]}) && inArena({x: b[0], y: b[1]});
+      const col = PORTAL_COLORS[k % PORTAL_COLORS.length];
+      [a, b].forEach(([x, y], end) => {
+        if (!inArena({x, y})) return;
+        const cx = x * C + C / 2, cy = y * C + C / 2;
+        ctx.save();
+        ctx.globalAlpha = live ? 1 : 0.3;
+        ctx.globalCompositeOperation = 'lighter';
+        const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, C * 0.48);
+        g.addColorStop(0, col); g.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.globalAlpha *= 0.45; ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(cx, cy, C * 0.48, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = live ? 1 : 0.3;
+        ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.shadowColor = col; ctx.shadowBlur = 12;
+        ctx.setLineDash([C * 0.22, C * 0.14]);
+        ctx.lineDashOffset = (end ? 1 : -1) * now / 25;   // the two ends swirl opposite ways
+        ctx.beginPath(); ctx.arc(cx, cy, C * 0.38, 0, Math.PI * 2); ctx.stroke();
+        ctx.restore();
+      });
+    });
   }
 
   function drawApple(p, now) {                       // a glowing red orb with a ping ring
@@ -1234,7 +1312,8 @@
     // Slide each segment from where it was to where it is, so movement looks smooth.
     const f = running ? Math.min(1, acc / tickMs()) : 1;
     const pts = s.snake.map((p, i) => {
-      const q = s.prev[i] || s.prev[s.prev.length - 1] || p;
+      let q = s.prev[i] || s.prev[s.prev.length - 1] || p;
+      if (Math.abs(q.x - p.x) + Math.abs(q.y - p.y) > 1) q = p;   // just went through a portal: don't slide across the board
       return {x: (q.x + (p.x - q.x) * f) * C + C / 2, y: (q.y + (p.y - q.y) * f) * C + C / 2};
     });
     const ghost = hasPower('ghost'), n = pts.length;
@@ -1262,6 +1341,7 @@
       for (let i = n - 1; i > first; i--) {
         ctx.strokeStyle = styleOf(i);
         ctx.lineWidth = widthOf(i);
+        if (Math.abs(pts[i].x - pts[i - 1].x) + Math.abs(pts[i].y - pts[i - 1].y) > C * 1.5) continue;   // split by a portal
         ctx.beginPath(); ctx.moveTo(pts[i].x, pts[i].y); ctx.lineTo(pts[i - 1].x, pts[i - 1].y); ctx.stroke();
       }
     };
