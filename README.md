@@ -39,6 +39,10 @@ Press **🗺️ Stages** to play through 7 stages with rock obstacles. Eat the g
 | 6 | Fortress | 16 🍎 |
 | 7 | Zigzag | 18 🍎 |
 
+## 🏅 Achievements
+
+12 achievements, each paying bonus coins once: eat 1 / 50 / 250 apples, catch 10 golden apples, score 200 / 500 in one game, score 100 on Hard, survive until the walls stop closing, get saved by a shield, reach a 3-day daily streak, own 4 skins, and clear all stages. Press **🏅** on the start or game-over screen to see your progress.
+
 ## Coins, skins and upgrades
 
 Every game earns 🪙 1 coin per 10 points. Spend coins in the **🛒 Shop** (on the start and game-over screens).
