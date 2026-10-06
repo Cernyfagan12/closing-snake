@@ -21,6 +21,9 @@ Pick a level on the start or game-over screen. Each level keeps its own best sco
 | Easy | 20 s | slower |
 | Normal | 15 s | standard |
 | Hard | 10 s | faster |
+| 📅 Daily | 15 s | standard |
+
+**Daily challenge:** the date picks the apples, so everyone gets the same apples in the same order that day. It keeps a separate "best today" score that resets at midnight, plus a 🔥 streak of days in a row you've played.
 
 ## Rules
 
