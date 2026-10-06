@@ -206,6 +206,7 @@
       power: null,          // {type, until}
       time: 0,
     };
+    s.prev = s.snake.map(p => ({...p}));
     s.food = freeCell(rng.food);
   }
 
@@ -244,6 +245,7 @@
     if (!hasPower('ghost') && body.some(p => p.x === head.x && p.y === head.y))
       return gameOver('You bit your own tail.');
 
+    s.prev = s.snake.map(p => ({...p}));   // where each segment was, for smooth drawing
     s.snake.unshift(head);
     if (s.grow > 0) s.grow--; else s.snake.pop();
 
@@ -390,65 +392,146 @@
       const k = (shakeUntil - now) / SHAKE_TIME * 8;
       ctx.translate((Math.random() * 2 - 1) * k, (Math.random() * 2 - 1) * k);
     }
+    drawBoard();
+    drawWalls();
+    if (s.food) drawApple(s.food, now);
+    if (s.gold) drawGold(s.gold, now);
+    drawSnake(now);
+    drawVignette();
+    drawEffects(now);
+    ctx.restore();
+  }
+
+  function drawBoard() {
     ctx.fillStyle = colors['--board'];
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = colors['--grid'];               // soft checkerboard
+    for (let y = 0; y < N; y++)
+      for (let x = (y % 2); x < N; x += 2) ctx.fillRect(x * C, y * C, C, C);
+  }
 
-    // grid
-    ctx.strokeStyle = colors['--grid'];
-    ctx.lineWidth = 1;
-    for (let i = 1; i < N; i++) {
-      ctx.beginPath(); ctx.moveTo(i * C, 0); ctx.lineTo(i * C, canvas.height); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(0, i * C); ctx.lineTo(canvas.width, i * C); ctx.stroke();
-    }
-
-    // walls
+  function drawWalls() {
     const warning = s.inset < MAX_INSET && running && L().wall - s.wallClock < WALL_WARN;
+    const pulse = 0.25 + 0.3 * (0.5 + 0.5 * Math.sin(s.time / 80));
     for (let y = 0; y < N; y++)
       for (let x = 0; x < N; x++) {
-        const p = {x, y};
-        if (!inArena(p)) { ctx.fillStyle = colors['--wall']; ctx.fillRect(x * C, y * C, C, C); }
-        else if (warning && !inArena(p, s.inset + 1)) {
-          const blink = Math.floor(s.time / 150) % 2;
+        const p = {x, y}, px = x * C, py = y * C;
+        if (!inArena(p)) {                            // bevelled stone block
+          ctx.fillStyle = colors['--wall'];
+          ctx.fillRect(px, py, C, C);
+          ctx.fillStyle = 'rgba(255,255,255,.10)';
+          ctx.fillRect(px, py, C, 3); ctx.fillRect(px, py, 3, C);
+          ctx.fillStyle = 'rgba(0,0,0,.28)';
+          ctx.fillRect(px, py + C - 3, C, 3); ctx.fillRect(px + C - 3, py, 3, C);
+        } else if (warning && !inArena(p, s.inset + 1)) {
           ctx.fillStyle = colors['--warn'];
-          ctx.globalAlpha = blink ? 0.55 : 0.25;
-          ctx.fillRect(x * C, y * C, C, C);
+          ctx.globalAlpha = pulse;
+          ctx.fillRect(px, py, C, C);
           ctx.globalAlpha = 1;
         }
       }
+    // faint glowing edge around the arena
+    const a = s.inset * C, w = (N - 2 * s.inset) * C;
+    ctx.strokeStyle = warning ? colors['--warn'] : 'rgba(143,240,184,.25)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(a + 1, a + 1, w - 2, w - 2);
+  }
 
-    // food
-    if (s.food) dot(s.food, colors['--apple'], 0.38);
-    if (s.gold) {
-      const left = GOLD_LIFETIME - (s.time - s.gold.born);
-      const pulse = 0.34 + Math.sin(s.time / 120) * 0.06;
-      ctx.globalAlpha = left < 1500 ? (Math.floor(s.time / 100) % 2 ? 1 : 0.3) : 1;
-      dot(s.gold, colors['--gold'], pulse);
-      ctx.globalAlpha = 1;
+  function drawApple(p, now) {
+    const cx = p.x * C + C / 2, cy = p.y * C + C / 2 + Math.sin(now / 300) * C * 0.04, r = C * 0.36;
+    ctx.fillStyle = 'rgba(0,0,0,.25)';                // shadow
+    ctx.beginPath(); ctx.ellipse(p.x * C + C / 2, p.y * C + C * 0.88, r * 0.8, r * 0.25, 0, 0, Math.PI * 2); ctx.fill();
+    const g = ctx.createRadialGradient(cx - r * 0.35, cy - r * 0.35, r * 0.1, cx, cy, r);
+    g.addColorStop(0, '#ffa3ab'); g.addColorStop(0.5, colors['--apple']); g.addColorStop(1, '#b8283a');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#6b4a2b'; ctx.lineWidth = 2.5;   // stem
+    ctx.beginPath(); ctx.moveTo(cx, cy - r * 0.8); ctx.lineTo(cx + r * 0.15, cy - r * 1.25); ctx.stroke();
+    ctx.fillStyle = '#4fd18b';                        // leaf
+    ctx.beginPath(); ctx.ellipse(cx + r * 0.45, cy - r * 1.05, r * 0.35, r * 0.16, -0.5, 0, Math.PI * 2); ctx.fill();
+  }
+
+  function drawGold(p, now) {
+    const left = GOLD_LIFETIME - (s.time - s.gold.born);
+    if (left < 1500 && Math.floor(s.time / 100) % 2) return;   // blink before it disappears
+    const cx = p.x * C + C / 2, cy = p.y * C + C / 2;
+    const r = C * (0.44 + Math.sin(now / 150) * 0.05), rot = now / 600;
+    ctx.save();
+    ctx.shadowColor = colors['--gold']; ctx.shadowBlur = 18;
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+    g.addColorStop(0, '#fff4c2'); g.addColorStop(1, colors['--gold']);
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    for (let i = 0; i < 10; i++) {                     // 5-point star
+      const a = rot + i * Math.PI / 5, rr = i % 2 ? r * 0.45 : r;
+      ctx.lineTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr);
     }
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
 
-    // snake
-    const ghost = hasPower('ghost');
-    ctx.globalAlpha = ghost ? 0.6 : 1;
-    s.snake.forEach((p, i) => {
-      ctx.fillStyle = i === 0 ? colors['--snake-head'] : (ghost ? colors['--ghost'] : colors['--snake']);
-      const pad = i === 0 ? 1.5 : 3;
-      roundRect(p.x * C + pad, p.y * C + pad, C - pad * 2, C - pad * 2, 6);
+  const SKIN = {head: '#8ff0b8', body: '#4fd18b', tail: '#2a8f5c'};
+  function mix(a, b, t) {                              // blend two #rrggbb colours
+    const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
+    const ch = sh => Math.round(((pa >> sh) & 255) + (((pb >> sh) & 255) - ((pa >> sh) & 255)) * t);
+    return `rgb(${ch(16)},${ch(8)},${ch(0)})`;
+  }
+
+  function drawSnake(now) {
+    // Slide each segment from where it was to where it is, so movement looks smooth.
+    const f = running ? Math.min(1, acc / tickMs()) : 1;
+    const pts = s.snake.map((p, i) => {
+      const q = s.prev[i] || s.prev[s.prev.length - 1] || p;
+      return {x: (q.x + (p.x - q.x) * f) * C + C / 2, y: (q.y + (p.y - q.y) * f) * C + C / 2};
     });
+    const ghost = hasPower('ghost'), n = pts.length;
+    const radius = i => C * (0.42 - 0.16 * i / Math.max(1, n - 1));
+    const color = i => ghost ? colors['--ghost'] : mix(SKIN.body, SKIN.tail, i / Math.max(1, n - 1));
+
+    ctx.globalAlpha = ghost ? 0.6 : 1;
+    ctx.lineCap = 'round';
+    for (let i = n - 1; i > 0; i--) {                  // body as one rounded tube, tail first
+      ctx.strokeStyle = color(i);
+      ctx.lineWidth = radius(i) * 2;
+      ctx.beginPath(); ctx.moveTo(pts[i].x, pts[i].y); ctx.lineTo(pts[i - 1].x, pts[i - 1].y); ctx.stroke();
+    }
+    ctx.strokeStyle = 'rgba(255,255,255,.18)';         // shine along the back
+    ctx.lineWidth = C * 0.12;
+    ctx.beginPath();
+    pts.forEach((p, i) => ctx[i ? 'lineTo' : 'moveTo'](p.x - C * 0.08, p.y - C * 0.1));
+    ctx.stroke();
+
+    // head
+    const h = pts[0], d = s.dir;
+    ctx.fillStyle = SKIN.head;
+    ctx.beginPath(); ctx.arc(h.x, h.y, C * 0.46, 0, Math.PI * 2); ctx.fill();
     ctx.globalAlpha = 1;
 
-    // eyes
-    const h = s.snake[0], d = s.dir;
-    ctx.fillStyle = '#0b1a12';
-    const cx = h.x * C + C / 2, cy = h.y * C + C / 2;
-    const ox = d.y !== 0 ? C * 0.18 : 0, oy = d.x !== 0 ? C * 0.18 : 0;
-    [[1], [-1]].forEach(([k]) => {
+    if (now % 1800 < 220 && running) {                 // flick the tongue now and then
+      ctx.strokeStyle = '#ff5d6c'; ctx.lineWidth = 2;
+      const tx = h.x + d.x * C * 0.75, ty = h.y + d.y * C * 0.75;
       ctx.beginPath();
-      ctx.arc(cx + d.x * C * 0.15 + ox * k, cy + d.y * C * 0.15 + oy * k, C * 0.08, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.moveTo(h.x + d.x * C * 0.4, h.y + d.y * C * 0.4); ctx.lineTo(tx, ty);
+      ctx.lineTo(tx + (d.x + d.y) * C * 0.12, ty + (d.y + d.x) * C * 0.12);
+      ctx.moveTo(tx, ty); ctx.lineTo(tx + (d.x - d.y) * C * 0.12, ty + (d.y - d.x) * C * 0.12);
+      ctx.stroke();
+    }
+    const ox = -d.y * C * 0.2, oy = d.x * C * 0.2;     // eyes: white with pupils looking ahead
+    [1, -1].forEach(k => {
+      const ex = h.x + d.x * C * 0.12 + ox * k, ey = h.y + d.y * C * 0.12 + oy * k;
+      ctx.fillStyle = '#fff';
+      ctx.beginPath(); ctx.arc(ex, ey, C * 0.13, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#0b1a12';
+      ctx.beginPath(); ctx.arc(ex + d.x * C * 0.05, ey + d.y * C * 0.05, C * 0.065, 0, Math.PI * 2); ctx.fill();
     });
+  }
 
-    drawEffects(now);
-    ctx.restore();
+  function drawVignette() {
+    const g = ctx.createRadialGradient(canvas.width / 2, canvas.height / 2, canvas.width * 0.35,
+                                       canvas.width / 2, canvas.height / 2, canvas.width * 0.75);
+    g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.35)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
 
   // --- effects (real time, so they finish playing after the game ends) ---
@@ -487,21 +570,6 @@
     ctx.globalAlpha = 1;
   }
 
-  function dot(p, color, r) {
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.arc(p.x * C + C / 2, p.y * C + C / 2, C * r, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  function roundRect(x, y, w, h, r) {
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.arcTo(x + w, y, x + w, y + h, r);
-    ctx.arcTo(x + w, y + h, x, y + h, r);
-    ctx.arcTo(x, y + h, x, y, r);
-    ctx.arcTo(x, y, x + w, y, r);
-    ctx.fill();
-  }
 
   // --- sound ---
   let audio;
