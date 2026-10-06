@@ -44,6 +44,7 @@
   }
   .overlay.hidden { display: none; }
   .overlay h2 { margin: 0 0 8px; font-size: 1.8rem; }
+  .overlay h2.best { color: var(--gold); font-size: 2.2rem; }
   .overlay p { margin: 4px 0; color: var(--muted); max-width: 340px; line-height: 1.4; }
   .legend { margin: 12px 0; font-size: .85rem; text-align: left; color: var(--text); }
   .legend div { margin: 3px 0; }
@@ -102,7 +103,7 @@
   const $ = id => document.getElementById(id);
   const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   const colors = {};
-  ['--board','--grid','--wall','--warn','--snake','--snake-head','--apple','--gold','--ghost'].forEach(k => colors[k] = css(k));
+  ['--text','--board','--grid','--wall','--warn','--snake','--snake-head','--apple','--gold','--ghost'].forEach(k => colors[k] = css(k));
 
   let best = 0;
   try { best = Number(localStorage.getItem('closingSnakeBest')) || 0; } catch (e) {}
@@ -163,7 +164,9 @@
     if (s.food && head.x === s.food.x && head.y === s.food.y) {
       s.apples++;
       s.grow += 1;
-      addScore(10);
+      const pts = addScore(10);
+      burst(head, colors['--apple'], 14);
+      popup(head, '+' + pts, colors['--text']);
       beep(520, 0.06);
       s.food = freeCell();
       if (!s.gold && Math.random() < 0.35) {
@@ -173,7 +176,9 @@
     }
     if (s.gold && head.x === s.gold.x && head.y === s.gold.y) {
       s.gold = null;
-      addScore(25);
+      const pts = addScore(25);
+      burst(head, colors['--gold'], 24);
+      popup(head, '+' + pts, colors['--gold']);
       grantPower();
     }
   }
@@ -196,8 +201,10 @@
   function flashPower(msg, ms) { flashMsg = msg; flashUntil = s.time + ms; }
 
   function addScore(n) {
-    s.score += hasPower('double') ? n * 2 : n;
+    const pts = hasPower('double') ? n * 2 : n;
+    s.score += pts;
     $('score').textContent = s.score;
+    return pts;
   }
 
   function closeWalls() {
@@ -209,20 +216,28 @@
     if (s.gold && !inArena(s.gold)) s.gold = null;
   }
 
+  const DEATH_PAUSE = 700;      // let the crash play out before the game-over screen
+  let overlayTimer = null;
+
   function gameOver(reason) {
     running = false;
     beep(110, 0.3);
-    if (s.score > best) {
+    shakeUntil = performance.now() + SHAKE_TIME;
+    burst(s.snake[0], colors['--warn'], 30);
+    const record = s.score > best;
+    if (record) {
       best = s.score;
       try { localStorage.setItem('closingSnakeBest', best); } catch (e) {}
       $('best').textContent = best;
-      reason += ' New best score!';
     }
-    showOverlay('Game over', `${reason} Score: ${s.score}`, 'Play again', false);
+    const text = `${reason} Score: ${s.score} · Best: ${best}. Press Space to play again.`;
+    overlayTimer = setTimeout(() =>
+      showOverlay(record ? '🏆 New best!' : 'Game over', text, 'Play again', false, record), DEATH_PAUSE);
   }
 
-  function showOverlay(title, text, btn, legend) {
+  function showOverlay(title, text, btn, legend, highlight = false) {
     $('ovTitle').textContent = title;
+    $('ovTitle').classList.toggle('best', highlight);
     $('ovText').textContent = text;
     $('startBtn').textContent = btn;
     $('legend').style.display = legend ? '' : 'none';
@@ -230,6 +245,7 @@
   }
 
   function start() {
+    clearTimeout(overlayTimer);  // restarting during the death pause skips the game-over screen
     reset();
     flashMsg = null;            // don't carry a power message into the new game
     $('score').textContent = 0;
@@ -258,7 +274,7 @@
       if (s.gold && s.time - s.gold.born > GOLD_LIFETIME) s.gold = null;
       while (running && acc >= tickMs()) { acc -= tickMs(); step(); }
     }
-    if (s) { draw(); updateHud(); }
+    if (s) { draw(now); updateHud(); }
     requestAnimationFrame(frame);
   }
 
@@ -273,7 +289,12 @@
     $('power').textContent = msg;
   }
 
-  function draw() {
+  function draw(now) {
+    ctx.save();
+    if (now < shakeUntil) {
+      const k = (shakeUntil - now) / SHAKE_TIME * 8;
+      ctx.translate((Math.random() * 2 - 1) * k, (Math.random() * 2 - 1) * k);
+    }
     ctx.fillStyle = colors['--board'];
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -330,6 +351,45 @@
       ctx.arc(cx + d.x * C * 0.15 + ox * k, cy + d.y * C * 0.15 + oy * k, C * 0.08, 0, Math.PI * 2);
       ctx.fill();
     });
+
+    drawEffects(now);
+    ctx.restore();
+  }
+
+  // --- effects (real time, so they finish playing after the game ends) ---
+  const SHAKE_TIME = 350;
+  let particles = [], popups = [], shakeUntil = 0;
+
+  function burst(cell, color, count) {
+    const now = performance.now(), cx = cell.x * C + C / 2, cy = cell.y * C + C / 2;
+    for (let i = 0; i < count; i++) {
+      const a = Math.random() * Math.PI * 2, v = 0.05 + Math.random() * 0.15;   // px per ms
+      particles.push({x: cx, y: cy, vx: Math.cos(a) * v, vy: Math.sin(a) * v, color, born: now, life: 350 + Math.random() * 300});
+    }
+  }
+
+  function popup(cell, text, color) {
+    popups.push({x: cell.x * C + C / 2, y: cell.y * C, text, color, born: performance.now(), life: 700});
+  }
+
+  function drawEffects(now) {
+    particles = particles.filter(p => now - p.born < p.life);
+    particles.forEach(p => {
+      const t = now - p.born;
+      ctx.globalAlpha = 1 - t / p.life;
+      ctx.fillStyle = p.color;
+      ctx.fillRect(p.x + p.vx * t - 3, p.y + p.vy * t + 0.0002 * t * t - 3, 6, 6);
+    });
+    popups = popups.filter(p => now - p.born < p.life);
+    ctx.font = `bold ${Math.round(C * 0.7)}px system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    popups.forEach(p => {
+      const t = now - p.born;
+      ctx.globalAlpha = 1 - t / p.life;
+      ctx.fillStyle = p.color;
+      ctx.fillText(p.text, p.x, p.y - t * 0.05);
+    });
+    ctx.globalAlpha = 1;
   }
 
   function dot(p, color, r) {
