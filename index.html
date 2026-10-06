@@ -35,22 +35,50 @@
     overscroll-behavior: none;   /* no pull-to-refresh while swiping */
     -webkit-tap-highlight-color: transparent;
   }
+  /* slowly drifting glow behind everything */
+  body::before {
+    content: ''; position: fixed; inset: -20%; z-index: -1; pointer-events: none;
+    background:
+      radial-gradient(40% 35% at 20% 15%, rgba(79, 209, 139, .13), transparent 70%),
+      radial-gradient(35% 35% at 85% 80%, rgba(159, 168, 255, .12), transparent 70%),
+      radial-gradient(25% 25% at 70% 20%, rgba(255, 201, 64, .06), transparent 70%);
+    animation: drift 20s ease-in-out infinite alternate;
+  }
+  @keyframes drift { to { transform: translate(5%, 4%) rotate(6deg); } }
+  h1, .overlay h2.logo {
+    background: linear-gradient(90deg, #8ff0b8, #ffc940, #ff8a9a, #8ff0b8);
+    background-size: 300% 100%;
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    animation: shimmer 8s linear infinite;
+  }
+  @keyframes shimmer { to { background-position: 300% 0; } }
   h1 { margin: 0 0 4px; font-size: 1.6rem; letter-spacing: .02em; }
+  .overlay h2.logo { font-size: 2.4rem; letter-spacing: .02em; filter: drop-shadow(0 0 14px rgba(143, 240, 184, .35)); }
   .sub { color: var(--muted); margin: 0 0 14px; font-size: .9rem; text-align: center; }
   .hud {
     display: flex; gap: 12px; justify-content: space-between; width: var(--size);
     background: var(--panel); padding: 10px 16px; border-radius: 10px; margin-bottom: 10px;
     font-variant-numeric: tabular-nums;
+    border: 1px solid rgba(255, 255, 255, .06); box-shadow: 0 8px 24px rgba(0, 0, 0, .25);
   }
+  .hud b.pop { animation: pop-num .3s ease-out; }
+  @keyframes pop-num { 40% { transform: scale(1.35); color: var(--gold); } }
+  .hud b { display: inline-block; }
   .hud div span { display: block; font-size: .7rem; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
   .hud div b { font-size: 1.2rem; }
   .wrap { position: relative; width: var(--size); aspect-ratio: 1; touch-action: none; }
-  canvas { width: 100%; height: 100%; display: block; border-radius: 10px; background: var(--board); touch-action: none; }
+  canvas {
+    width: 100%; height: 100%; display: block; border-radius: 10px; background: var(--board); touch-action: none;
+    box-shadow: 0 12px 36px rgba(0, 0, 0, .45), 0 0 0 1px rgba(255, 255, 255, .05);
+  }
   .overlay {
     position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
     background: rgba(10, 14, 22, .82); border-radius: 10px; text-align: center; padding: 16px;
     overflow-y: auto; touch-action: pan-y;   /* menus scroll if they don't fit a small board */
+    -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+    animation: menu-in .22s ease-out;
   }
+  @keyframes menu-in { from { opacity: 0; transform: scale(.97); } }
   /* centre the content, but let it scroll from the top when it's taller than the board */
   .overlay > :first-child { margin-top: auto; }
   .overlay > :last-child { margin-bottom: auto; }
@@ -65,6 +93,20 @@
     background: var(--snake); color: #08130d; cursor: pointer;
   }
   button:hover { filter: brightness(1.1); }
+  button:active:not(:disabled) { transform: scale(.96); }
+  button { transition: transform .08s, box-shadow .08s, filter .15s; }
+  /* main action buttons get a chunky 3D look that presses down */
+  #startBtn, #shopClose, #stagesClose, .upgrade button:not(:disabled) {
+    background: linear-gradient(180deg, #74e4a8, #3fbf7a);
+    box-shadow: 0 4px 0 #2a8f5c, 0 8px 18px rgba(0, 0, 0, .3);
+  }
+  #startBtn:active, #shopClose:active, #stagesClose:active, .upgrade button:not(:disabled):active {
+    transform: translateY(3px); box-shadow: 0 1px 0 #2a8f5c, 0 3px 8px rgba(0, 0, 0, .3);
+  }
+  #startBtn { font-size: 1.1rem; padding: 12px 34px; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before { animation: none !important; transition: none !important; }
+  }
   .hud .mute {
     margin: 0; padding: 4px 10px; align-self: center; font-size: 1.2rem;
     background: transparent; color: var(--text); border: 1px solid var(--wall);
@@ -151,7 +193,7 @@
   <div class="wrap">
     <canvas id="board" width="630" height="630"></canvas>
     <div class="overlay" id="overlay">
-      <h2 id="ovTitle">Closing Snake</h2>
+      <h2 id="ovTitle" class="logo">Closing Snake</h2>
       <p id="ovText">Use the arrow keys / WASD, or swipe on a phone.</p>
       <div class="legend" id="legend">
         <div>🍎 Red apple: +10 points, and the snake grows</div>
@@ -534,6 +576,8 @@
       time: 0,
       shield: false,        // armed at start() if you own a shield
       graceUntil: 0,        // after a shield saves you, crashes are ignored until this time
+      deadAt: 0,            // when the snake died (death animation), 0 while alive
+      popped: 0,            // how many segments the death animation has burst so far
       blocks: new Set(stage !== null ? STAGES[stage].blocks : []),   // rocks, as "x,y"
     };
     s.prev = s.snake.map(p => ({...p}));
@@ -630,7 +674,9 @@
   function addScore(n) {
     const pts = hasPower('double') ? n * 2 : n;
     s.score += pts;
-    $('score').textContent = s.score;
+    const el = $('score');
+    el.textContent = s.score;
+    el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop');   // restart the pop animation
     return pts;
   }
 
@@ -655,6 +701,7 @@
 
   function gameOver(reason) {
     running = false;
+    s.deadAt = performance.now();   // starts the death animation in drawSnake
     beep(110, 0.3); buzz([60, 40, 90]);
     shakeUntil = performance.now() + SHAKE_TIME;
     burst(s.snake[0], colors['--warn'], 30);
@@ -684,6 +731,7 @@
   function showOverlay(title, text, btn, legend, highlight = false) {
     $('ovTitle').textContent = title;
     $('ovTitle').classList.toggle('best', highlight);
+    $('ovTitle').classList.remove('logo');   // the animated logo is only for the first screen
     $('ovText').textContent = text;
     $('startBtn').textContent = btn;
     $('legend').style.display = legend ? '' : 'none';
@@ -757,13 +805,31 @@
       ctx.translate((Math.random() * 2 - 1) * k, (Math.random() * 2 - 1) * k);
     }
     drawBoard();
+    drawFireflies(now);
     drawWalls();
     if (s.food) drawApple(s.food, now);
     if (s.gold) drawGold(s.gold, now);
     drawSnake(now);
     drawVignette();
+    if (s.deadAt && now - s.deadAt < 300) {          // red flash when you crash
+      ctx.fillStyle = `rgba(224, 83, 61, ${0.35 * (1 - (now - s.deadAt) / 300)})`;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
     drawEffects(now);
     ctx.restore();
+  }
+
+  const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function drawFireflies(now) {   // soft drifting lights; positions come from time, so there's no state
+    if (REDUCED_MOTION) return;
+    for (let i = 0; i < 16; i++) {
+      const x = ((i * 0.618) % 1 * canvas.width + now * (0.008 + (i % 3) * 0.004)) % canvas.width;
+      const y = ((i * 0.381 + 0.17) % 1) * canvas.height + Math.sin(now / 900 + i) * 14;
+      const a = 0.1 + 0.1 * Math.sin(now / 500 + i * 1.7);
+      if (a <= 0.02) continue;
+      ctx.fillStyle = `rgba(143, 240, 184, ${a})`;
+      ctx.beginPath(); ctx.arc(x, y, 2 + (i % 3), 0, Math.PI * 2); ctx.fill();
+    }
   }
 
   function drawBoard() {
@@ -861,9 +927,22 @@
       : sk.rainbow ? `hsl(${(i * 24 + now / 8) % 360}, 85%, 62%)`
       : mix(sk.body, sk.tail, i / Math.max(1, n - 1));
 
+    // Death animation: segments burst one by one, head first, after a short pause.
+    let first = 0;
+    if (s.deadAt) {
+      const per = Math.min(40, 450 / n), t = now - s.deadAt - 120;
+      const popped = Math.max(0, Math.min(n, Math.floor(t / per)));
+      while (s.popped < popped) {
+        burst(s.snake[s.popped], s.popped ? color(s.popped) : sk.head, 6);
+        s.popped++;
+      }
+      first = popped;
+      if (first >= n) return;
+    }
+
     ctx.globalAlpha = ghost ? 0.6 : 1;
     ctx.lineCap = 'round';
-    for (let i = n - 1; i > 0; i--) {                  // body as one rounded tube, tail first
+    for (let i = n - 1; i > first; i--) {              // body as one rounded tube, tail first
       ctx.strokeStyle = color(i);
       ctx.lineWidth = radius(i) * 2;
       ctx.beginPath(); ctx.moveTo(pts[i].x, pts[i].y); ctx.lineTo(pts[i - 1].x, pts[i - 1].y); ctx.stroke();
@@ -871,8 +950,9 @@
     ctx.strokeStyle = 'rgba(255,255,255,.18)';         // shine along the back
     ctx.lineWidth = C * 0.12;
     ctx.beginPath();
-    pts.forEach((p, i) => ctx[i ? 'lineTo' : 'moveTo'](p.x - C * 0.08, p.y - C * 0.1));
+    pts.slice(first).forEach((p, i) => ctx[i ? 'lineTo' : 'moveTo'](p.x - C * 0.08, p.y - C * 0.1));
     ctx.stroke();
+    if (first > 0) { ctx.globalAlpha = 1; return; }    // the head has already burst
 
     // head
     const h = pts[0], d = s.dir;
@@ -892,6 +972,15 @@
     const ox = -d.y * C * 0.2, oy = d.x * C * 0.2;     // eyes: white with pupils looking ahead
     [1, -1].forEach(k => {
       const ex = h.x + d.x * C * 0.12 + ox * k, ey = h.y + d.y * C * 0.12 + oy * k;
+      if (s.deadAt) {                                  // ✕ eyes when it crashes
+        const e = C * 0.1;
+        ctx.strokeStyle = '#0b1a12'; ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(ex - e, ey - e); ctx.lineTo(ex + e, ey + e);
+        ctx.moveTo(ex + e, ey - e); ctx.lineTo(ex - e, ey + e);
+        ctx.stroke();
+        return;
+      }
       ctx.fillStyle = '#fff';
       ctx.beginPath(); ctx.arc(ex, ey, C * 0.13, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = '#0b1a12';
