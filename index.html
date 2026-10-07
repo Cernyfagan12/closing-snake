@@ -187,6 +187,8 @@
   .overlay .daily-info { color: var(--gold); font-size: .85rem; margin-top: 8px; }
   .overlay .daily-info:empty { display: none; }
   .hud-btns { display: flex; gap: 6px; align-self: center; }
+  .hud .account { color: var(--gold); border-color: rgba(255, 210, 63, .45); }
+  .hud .account img { width: 1.3em; height: 1.3em; border-radius: 50%; display: block; box-shadow: 0 0 8px rgba(0, 240, 255, .6); }
   button { touch-action: manipulation; }   /* no double-tap zoom on buttons */
   .dpad {
     display: none; grid-template-columns: repeat(3, 64px); grid-template-rows: repeat(2, 56px); gap: 8px;
@@ -250,6 +252,7 @@
     <div><span id="bestLabel">Best</span><b id="best">0</b></div>
     <div><span>Walls in</span><b id="wallTimer">15</b></div>
     <div class="hud-btns">
+      <button class="mute account" id="accountBtn" aria-label="Log in" title="Log in to save your progress" style="display: none"></button>
       <button class="mute" id="pauseBtn" aria-label="Pause" title="Pause (Space)"></button>
       <button class="mute" id="muteBtn" aria-label="Mute sound" title="Mute (M)"></button>
     </div>
@@ -316,7 +319,58 @@
   </div>
 
 <script>
-(() => {
+(async () => {
+  // --- CrazyGames SDK: account login, cloud saves and gameplay events. It's only loaded when the
+  // game runs on CrazyGames; everywhere else (e.g. GitHub Pages) it stays off and saves use localStorage.
+  const CG = {
+    sdk: null,
+    playing: false,
+    async init() {
+      const onCrazyGames = /crazygames/i.test(location.hostname) || /useLocalSdk=true/.test(location.search);
+      try {
+        if (!window.CrazyGames && onCrazyGames) {
+          await new Promise((ok, fail) => {
+            const tag = document.createElement('script');
+            tag.src = 'https://sdk.crazygames.com/crazygames-sdk-v3.js';
+            tag.onload = ok; tag.onerror = fail;
+            document.head.append(tag);
+            setTimeout(fail, 5000);   // never let a slow SDK hold the game up
+          });
+        }
+        const sdk = window.CrazyGames && window.CrazyGames.SDK;
+        if (!sdk) return;
+        await sdk.init();
+        if (sdk.environment === 'disabled') return;   // every SDK call would throw off CrazyGames
+        this.sdk = sdk;
+      } catch (e) { this.sdk = null; }
+    },
+    call(fn) { if (this.sdk) try { fn(this.sdk); } catch (e) {} },
+    // Gameplay events: start on play/resume, stop on every break (pause, game over, stage clear).
+    start() { if (!this.playing) { this.playing = true; this.call(s => s.game.gameplayStart()); } },
+    stop() { if (this.playing) { this.playing = false; this.call(s => s.game.gameplayStop()); } },
+    happy() { this.call(s => s.game.happytime()); },
+    // Where saves go: the SDK's data module (same API as localStorage, synced to the player's
+    // CrazyGames account), or plain localStorage.
+    storage() {
+      let local = null;
+      try { local = window.localStorage; } catch (e) {}
+      const data = this.sdk && this.sdk.data;
+      if (!data) return local || {getItem: () => null, setItem() {}};
+      try {                          // first run with the SDK: bring over any progress saved before
+        if (local && data.getItem('closingSnakeCoins') === null) {
+          for (let i = 0; i < local.length; i++) {
+            const k = local.key(i);
+            if (k && k.startsWith('closingSnake')) data.setItem(k, local.getItem(k));
+          }
+        }
+      } catch (e) {}
+      return data;
+    },
+  };
+  await CG.init();
+  CG.call(s => s.game.loadingStart());
+  const storage = CG.storage();
+
   const N = 21;                 // grid size
   const MAX_INSET = 6;          // smallest arena is 9x9
   const LEVELS = {              // wall = ms between wall closings; tick = ms per move
@@ -339,6 +393,7 @@
     play:  svg('<path d="M7 5l12 7-12 7z"/>'),
     sound: svg('<path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M17 9a4 4 0 0 1 0 6M19.5 6.5a8 8 0 0 1 0 11"/>'),
     muted: svg('<path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M17 9l5 6M22 9l-5 6"/>'),
+    user:  svg('<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>'),
   };
   const isTouch = window.matchMedia('(pointer: coarse)').matches;
   const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -366,14 +421,14 @@
 
   function loadStreak() {
     let st = {last: '', count: 0};
-    try { st = JSON.parse(localStorage.getItem('closingSnakeStreak')) || st; } catch (e) {}
+    try { st = JSON.parse(storage.getItem('closingSnakeStreak')) || st; } catch (e) {}
     return (st.last === today() || st.last === yesterday()) ? st : {last: st.last, count: 0};
   }
   function recordDailyPlay() {
     const st = loadStreak();
     if (st.last === today()) return;
     const next = {last: today(), count: st.count + 1};
-    try { localStorage.setItem('closingSnakeStreak', JSON.stringify(next)); } catch (e) {}
+    try { storage.setItem('closingSnakeStreak', JSON.stringify(next)); } catch (e) {}
   }
   function updateDailyInfo() {
     if (level !== 'daily') { $('dailyInfo').textContent = ''; return; }
@@ -396,9 +451,9 @@
     if (!LEVELS[l]) return;
     level = l;
     stage = null;                // picking a level leaves stage mode
-    try { localStorage.setItem('closingSnakeLevel', l); } catch (e) {}
+    try { storage.setItem('closingSnakeLevel', l); } catch (e) {}
     best = 0;
-    try { best = Number(localStorage.getItem(bestKey(l))) || 0; } catch (e) {}
+    try { best = Number(storage.getItem(bestKey(l))) || 0; } catch (e) {}
     $('best').textContent = best;
     $('bestLabel').textContent = l === 'daily' ? 'Best today' : `Best · ${L().name}`;
     updateDailyInfo();
@@ -408,7 +463,7 @@
   }
 
   let savedLevel = 'normal';
-  try { savedLevel = localStorage.getItem('closingSnakeLevel') || 'normal'; } catch (e) {}
+  try { savedLevel = storage.getItem('closingSnakeLevel') || 'normal'; } catch (e) {}
   setLevel(LEVELS[savedLevel] ? savedLevel : 'normal');
 
   // --- coins & skins ---
@@ -436,8 +491,8 @@
     stardust: {name: 'Stardust', price: 220, colors: ['#fff6c9', '#ffd23f', '#ffffff'], shape: 'star'},
   };
   const store = {                // JSON in localStorage; falls back to defaults if storage is blocked
-    get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
-    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
+    get(k, d) { try { const v = storage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
+    set(k, v) { try { storage.setItem(k, JSON.stringify(v)); } catch (e) {} },
   };
   let coins = Number(store.get('closingSnakeCoins', 0)) || 0;
   let owned = store.get('closingSnakeSkins', ['classic']);
@@ -715,6 +770,7 @@
 
   function stageClear() {
     running = false;
+    CG.stop(); CG.happy();
     const i = stage, last = i === STAGES.length - 1;
     const coinsWon = earnCoins(10 + 5 * i + s.score / 10);   // clear bonus + the usual score coins
     addCoins(coinsWon);
@@ -1026,6 +1082,7 @@
 
   function gameOver(reason) {
     running = false;
+    CG.stop();
     s.deadAt = performance.now();   // starts the death animation in drawSnake
     beep(110, 0.3); buzz([60, 40, 90]);
     shakeUntil = performance.now() + SHAKE_TIME;
@@ -1042,8 +1099,9 @@
     const record = s.score > best;
     if (record) {
       best = s.score;
-      try { localStorage.setItem(bestKey(level), best); } catch (e) {}
+      try { storage.setItem(bestKey(level), best); } catch (e) {}
       $('best').textContent = best;
+      CG.happy();
     }
     const earned = earnCoins(s.score / 10);
     addCoins(earned);
@@ -1082,11 +1140,14 @@
     $('overlay').classList.add('hidden');
     running = true; paused = false; acc = 0; lastFrame = performance.now();
     $('pauseBtn').innerHTML = ICONS.pause;
+    CG.start();
   }
 
-  function togglePause() {
+  // fromTabSwitch: CrazyGames asks not to report a break when the player just switches tabs
+  function togglePause(fromTabSwitch = false) {
     if (!running) return;
     paused = !paused;
+    if (paused && !fromTabSwitch) CG.stop(); else if (!paused) CG.start();
     $('pauseBtn').innerHTML = paused ? ICONS.play : ICONS.pause;
     $('pauseBtn').setAttribute('aria-label', paused ? 'Resume' : 'Pause');
     if (paused) showOverlay('Paused', isTouch ? 'Tap Resume to keep playing.' : 'Press Space or the button to resume.', 'Resume', false);
@@ -1547,7 +1608,7 @@
   // --- sound ---
   let audio;
   let muted = false;
-  try { muted = localStorage.getItem('closingSnakeMuted') === '1'; } catch (e) {}
+  try { muted = storage.getItem('closingSnakeMuted') === '1'; } catch (e) {}
 
   // Browsers only allow audio after a user gesture, so create/resume it from input handlers.
   function unlockAudio() {
@@ -1559,7 +1620,7 @@
 
   function setMuted(m) {
     muted = m;
-    try { localStorage.setItem('closingSnakeMuted', m ? '1' : '0'); } catch (e) {}
+    try { storage.setItem('closingSnakeMuted', m ? '1' : '0'); } catch (e) {}
     const btn = $('muteBtn');
     btn.innerHTML = m ? ICONS.muted : ICONS.sound;
     btn.setAttribute('aria-label', m ? 'Unmute sound' : 'Mute sound');
@@ -1622,7 +1683,7 @@
   }, {passive: true}));
 
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden && running && !paused) togglePause();
+    if (document.hidden && running && !paused) togglePause(true);
   });
 
   $('startBtn').addEventListener('click', () => {
@@ -1674,10 +1735,50 @@
 
   setMuted(muted);
   $('pauseBtn').innerHTML = ICONS.pause;
+
+  // --- CrazyGames account: a login button in the HUD (only on CrazyGames, when accounts are on) ---
+  async function setupAccount() {
+    const sdk = CG.sdk;
+    if (!sdk || !sdk.user || !sdk.user.isUserAccountAvailable) return;
+    const btn = $('accountBtn');
+    let user = null;
+    try { user = await sdk.user.getUser(); } catch (e) {}
+    const show = u => {
+      btn.style.display = '';
+      if (u) {
+        btn.textContent = '';
+        if (u.profilePictureUrl) {
+          const img = document.createElement('img');
+          img.src = u.profilePictureUrl; img.alt = '';
+          btn.append(img);
+        } else btn.innerHTML = ICONS.user;
+        btn.title = `Logged in as ${u.username}. Your progress is saved to your account.`;
+        btn.setAttribute('aria-label', `Logged in as ${u.username}`);
+      } else {
+        btn.innerHTML = ICONS.user;
+        btn.title = 'Log in to save your progress on any device';
+        btn.setAttribute('aria-label', 'Log in');
+      }
+    };
+    show(user);
+    // Logging in switches the save to the account's data, so reload to pick it up.
+    try { sdk.user.addAuthListener(u => { if (u) location.reload(); }); } catch (e) {}
+    btn.addEventListener('click', async e => {
+      e.currentTarget.blur();
+      if (user) { toast(`👤 ${user.username} · progress saved to your account`); return; }
+      try {
+        const u = await sdk.user.showAuthPrompt();
+        if (u) location.reload();
+      } catch (err) {}             // the player closed the prompt
+    });
+  }
+  setupAccount();
+
   updateCoins();
   checkAchievements();          // award anything already earned (e.g. stages cleared before this update)
   reset();
   requestAnimationFrame(frame);
+  CG.call(s => s.game.loadingStop());
 })();
 </script>
 </body>
