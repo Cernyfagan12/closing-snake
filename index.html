@@ -339,7 +339,9 @@
         }
         const sdk = window.CrazyGames && window.CrazyGames.SDK;
         if (!sdk) return;
-        await sdk.init();
+        // never wait forever for the SDK: after 10 s the game starts without it (saves go to localStorage).
+        // On CrazyGames init can take several seconds, so this is only a safety net.
+        await Promise.race([sdk.init(), new Promise((ok, fail) => setTimeout(() => fail(new Error('SDK init timed out')), 10000))]);
         if (sdk.environment === 'disabled') return;   // every SDK call would throw off CrazyGames
         this.sdk = sdk;
       } catch (e) { this.sdk = null; }
