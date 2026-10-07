@@ -57,6 +57,11 @@ Press **🗺️ Stages** to play through 14 stages in two worlds. Eat the goal n
 
 14 achievements, each paying bonus coins once: eat 1 / 50 / 250 apples, catch 10 golden apples, score 200 / 500 in one game, score 100 on Hard, survive until the walls stop closing, get saved by a shield, reach a 3-day daily streak, own 4 skins, clear all stages, rebirth once, and jump through 25 portals. Press **🏅** on the start or game-over screen to see your progress.
 
+## 👤 Saving your progress
+
+- **On CrazyGames:** press the 👤 button in the score bar to log in with your CrazyGames account. Your coins, skins, upgrades, stages and achievements are then saved to your account and follow you to any device. Progress you made as a guest moves into your account when you log in.
+- **Everywhere else** (like the GitHub Pages link): progress is saved in your browser, as before. The 👤 button doesn't appear, and the game doesn't load anything from CrazyGames.
+
 ## Coins, skins and upgrades
 
 Every game earns 🪙 1 coin per 10 points. Spend coins in the **🛒 Shop** (on the start and game-over screens).
